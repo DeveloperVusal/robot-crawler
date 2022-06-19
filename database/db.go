@@ -12,6 +12,7 @@ import (
 
 type Database struct{}
 
+// Метод подключения к БД MySQL
 func (db *Database) ConnMySQL(serverName string) (*sql.DB, error) {
 	cfg := config.ConfigDatabaseLoad()
 
@@ -30,6 +31,7 @@ func (db *Database) ConnMySQL(serverName string) (*sql.DB, error) {
 	return db.DriverMySQL(&driverName, &dataSourceName)
 }
 
+// Метод подключения к БД PgSQL
 func (db *Database) ConnPgSQL(serverName string) (context.Context, *pgx.Conn, error) {
 	cfg := config.ConfigDatabaseLoad()
 
@@ -49,10 +51,12 @@ func (db *Database) ConnPgSQL(serverName string) (context.Context, *pgx.Conn, er
 
 }
 
+// Вызов драйвера mysql
 func (db *Database) DriverMySQL(driverName *string, dataSourceame *string) (*sql.DB, error) {
 	return sql.Open(*driverName, *dataSourceame)
 }
 
+// Вызов драйвера pgsql
 func (db *Database) DriverPgSQL(dataSourceame *string) (*pgx.Conn, error) {
 	return pgx.Connect(context.Background(), *dataSourceame)
 }

@@ -228,6 +228,7 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 	return true
 }
 
+// Метод отключает страницу из индекса
 func (indx *Indexing) PageDisableIndex(id *uint64) {
 	db := dbpkg.Database{}
 	ctx, dbn, err := db.ConnPgSQL("pgsql")
@@ -257,6 +258,7 @@ func (indx *Indexing) PageDisableIndex(id *uint64) {
 	_ = res.RowsAffected()
 }
 
+// Метод удаляет страницу из индекса
 func (indx *Indexing) PageDeleteIndex(id *uint64, status_code *int) {
 	db := dbpkg.Database{}
 	ctx, dbn, err := db.ConnPgSQL("pgsql")

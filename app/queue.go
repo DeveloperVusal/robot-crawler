@@ -7,7 +7,7 @@ import (
 
 type Queue struct{}
 
-// Метод роверяет имеются ли страницы в очереди на обработку
+// Метод проверяет и запускает индексацию страниц в очереди
 func (q *Queue) IsQueue() {
 	// Подключаемся к БД
 	db := dbpkg.Database{}
@@ -73,7 +73,7 @@ func (q *Queue) IsQueue() {
 	}
 }
 
-// Метод добавляет страницу в очередь на обработку
+// Метод статус страницы в очереди
 func (q *Queue) SetQueue(id uint64, status int, handler int) {
 	// Подключаемся к БД
 	db := dbpkg.Database{}
@@ -94,6 +94,7 @@ func (q *Queue) SetQueue(id uint64, status int, handler int) {
 	}
 }
 
+// Метод добавляет страницу в очередь на обработку
 func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 	// Подключаемся к БД
 	db := dbpkg.Database{}

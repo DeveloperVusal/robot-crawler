@@ -8,7 +8,7 @@ import (
 
 type SearchDB struct{}
 
-// Метод проверяет имеется ли страница в базе для поиска
+// Метод проверяет имется ли страница в базе для поиска
 func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
 	db := dbpkg.Database{}
 	ctx, dbn, err := db.ConnPgSQL("pgsql")

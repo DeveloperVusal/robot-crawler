@@ -7,6 +7,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Метод получает данные для подключения к БД
 func ConfigDatabaseLoad() map[string]map[string]string {
 	var err = godotenv.Load()
 
