@@ -1,4 +1,4 @@
-package core
+package database
 
 import (
 	"context"
@@ -46,7 +46,7 @@ func (db *Database) ConnPgSQL(serverName string) (context.Context, *pgx.Conn, er
 	_db, _err := db.DriverPgSQL(&dataSourceName)
 
 	return context.Background(), _db, _err
-	
+
 }
 
 func (db *Database) DriverMySQL(driverName *string, dataSourceame *string) (*sql.DB, error) {

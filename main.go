@@ -9,14 +9,14 @@ import (
 )
 
 func main() {
-	bgs := &core.Robotgo{}
+	rb := &core.Robotgo{}
 
 	var events evio.Events
 
 	events.Tick = func() (delay time.Duration, action evio.Action) {
-		bgs.IsQueue()
+		rb.Run()
 
-		delay = time.Second * 5
+		delay = time.Second * 1
 		return
 	}
 

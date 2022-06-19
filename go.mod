@@ -3,7 +3,11 @@ module robot
 go 1.18
 
 require (
+	github.com/PuerkitoBio/goquery v1.8.0 // indirect
+	github.com/andybalholm/cascadia v1.3.1 // indirect
+	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0 // indirect
+	github.com/gorilla/css v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.12.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -14,7 +18,9 @@ require (
 	github.com/jackc/pgx/v4 v4.16.1 // indirect
 	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/kavu/go_reuseport v1.5.0 // indirect
+	github.com/microcosm-cc/bluemonday v1.0.18 // indirect
 	github.com/tidwall/evio v1.0.8 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/text v0.3.7 // indirect
 )
