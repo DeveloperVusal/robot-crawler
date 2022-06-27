@@ -39,7 +39,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 			}
 			isValid, newUrl := rbtxt.UrlHandle(&indx.Resp.Url)
 
-			if newUrl != indx.Resp.Url {
+			if len(newUrl) > 4 && newUrl != indx.Resp.Url {
 				indx.Resp.Url = newUrl
 			}
 

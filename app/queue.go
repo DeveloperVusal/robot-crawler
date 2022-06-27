@@ -2,6 +2,7 @@ package app
 
 import (
 	"log"
+	neturl "net/url"
 	dbpkg "robot/database"
 )
 
@@ -36,38 +37,53 @@ func (q *Queue) IsQueue() {
 		rows.Scan(&id, &url, &domain_id, &domain_full)
 	}
 
-	req := &Request{}
+	isContinue := true
+	_, errp := neturl.Parse(url)
 
-	// Если есть, что запустить в обработку
-	if id > 0 && req.IsRequestLimit(&url) {
-		q.SetQueue(id, 0, 1) // Включаем обработку url
+	// Если в очередь попала не корректный url
+	if errp != nil {
+		q.SetQueue(id, 503, 0)
+		isContinue = false
+	}
 
+	if isContinue {
 		req := &Request{}
-		resp := req.GetPageData(&url) // Делаем запрос и получаем данные url
-		indx := &Indexing{
-			QueueId:     id,
-			Domain_id:   domain_id,
-			Domain_full: domain_full,
-			Resp:        &resp,
-		}
 
-		srchdb := &SearchDB{}
-		idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
+		// Если есть, что запустить в обработку
+		if id > 0 && req.IsRequestLimit(&url) {
+			q.SetQueue(id, 0, 1) // Включаем обработку url
 
-		// Если такой url есть в базе
-		if isPage {
-			// Запускаем индексацию
-			go indx.Run(idPage, resp.Url)
-		} else { // Иначе
-			// Добавляем url в базу
-			lastInsertId, origUrl := srchdb.AddWebPageBase(&domain_id, resp)
+			req := &Request{}
+			resp := req.GetPageData(&url) // Делаем запрос и получаем данные url
+			indx := &Indexing{
+				QueueId:     id,
+				Domain_id:   domain_id,
+				Domain_full: domain_full,
+				Resp:        &resp,
+			}
 
-			// Если url добавлен
-			if lastInsertId > 0 {
+			srchdb := &SearchDB{}
+			idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
+
+			// Если такой url есть в базе
+			if isPage {
 				// Запускаем индексацию
-				go indx.Run(lastInsertId, origUrl)
-			} else {
-				q.SetQueue(id, 500, 2) // Пропускаем url
+				go indx.Run(idPage, resp.Url)
+			} else { // Иначе
+				if len(resp.Url) > 4 {
+					// Добавляем url в базу
+					lastInsertId, origUrl := srchdb.AddWebPageBase(&domain_id, &resp)
+
+					// Если url добавлен
+					if lastInsertId > 0 {
+						// Запускаем индексацию
+						go indx.Run(lastInsertId, origUrl)
+					} else {
+						q.SetQueue(id, 500, 2) // Пропускаем url
+					}
+				} else {
+					q.SetQueue(id, 501, 2) // Пропускаем url
+				}
 			}
 		}
 	}

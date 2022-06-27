@@ -31,7 +31,7 @@ func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
 }
 
 // Метод добавляет страницу в базу для поиска
-func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp PageReqData) (uint64, string) {
+func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint64, string) {
 	if resp.StatusCode == 200 {
 		matched, _ := regexp.MatchString(`^(text\/html|text\/plain)`, resp.Header.Get("Content-Type"))
 
@@ -43,7 +43,7 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp PageReqData) (uint6
 			}
 			isValid, newUrl := rbtxt.UrlHandle(&resp.Url)
 
-			if newUrl != resp.Url {
+			if len(newUrl) > 4 && newUrl != resp.Url {
 				resp.Url = newUrl
 			}
 

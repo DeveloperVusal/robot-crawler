@@ -24,13 +24,17 @@ type Robotstxt struct {
 func (r *Robotstxt) UrlHandle(link *string) (bool, string) {
 	uParseDom, _ := url.Parse(*link)
 	filename := uParseDom.Scheme + "://" + uParseDom.Host + "/robots.txt"
-
+	fmt.Println("link", *link)
 	fmt.Println("filename", filename)
 
 	robotsData := r.get(&filename)
 	userAgent := os.Getenv("BOT_USERAGENT")
 	var isValid bool
 	var handleUrl string
+
+	if len(robotsData[userAgent]) <= 0 {
+		return true, ""
+	}
 
 	for key, value := range robotsData {
 		if key == userAgent {
