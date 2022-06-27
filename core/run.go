@@ -11,5 +11,6 @@ type Robotgo struct{}
 func (rg *Robotgo) Run() {
 	appqueue := &app.Queue{}
 
+	appqueue.ContinueQueue()
 	appqueue.IsQueue()
 }

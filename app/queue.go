@@ -87,10 +87,49 @@ func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
 	defer dbn.Close()
 
 	// Обновляем статус в очереди
-	_, err2 := dbn.Exec("UPDATE `queue_pages` SET status = ?, handler = ? WHERE id = ?", _status, _handler, id)
+	_, err2 := dbn.Exec("UPDATE `queue_pages` SET status = ?, handler = ?, thread_time = NOW() WHERE id = ?", _status, _handler, id)
 
 	if err2 != nil {
 		log.Fatalln(err2)
+	}
+}
+
+// Пропустить зависшую страницу в очереди
+func (q *Queue) ContinueQueue() {
+	// Подключаемся к БД
+	db := dbpkg.Database{}
+	dbn, err := db.ConnMySQL("mysql")
+
+	// Если есть ошибки выводим в лог
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	defer dbn.Close()
+
+	// Проверяем имеются ли в очереди страницы зависщие на более 5 минут
+	var id uint64
+	var sql string = `
+		SELECT
+			id
+		FROM queue_pages
+		WHERE
+			status = 0 AND
+			handler = 1 AND
+			UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time) >= 300`
+
+	rows, err2 := dbn.Query(sql)
+
+	if err2 != nil {
+		log.Fatalln(err2)
+	}
+
+	for rows.Next() {
+		rows.Scan(&id)
+	}
+
+	if id > 0 {
+		q.SetQueue(id, 700, 0)
 	}
 }
 
