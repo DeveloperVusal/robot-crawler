@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -110,4 +111,26 @@ func (rq *Request) IsRequestLimit(url *string) bool {
 			return false
 		}
 	}
+}
+
+// Метод скачивает и получает содержимое файла (txt, csv и др.)
+func (rq *Request) GetReadFile(url *string) []string {
+	client := http.Client{}
+	resp, err := client.Get(*url)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	defer resp.Body.Close()
+
+	scan := bufio.NewScanner(resp.Body)
+
+	var txtlines []string
+
+	for scan.Scan() {
+		txtlines = append(txtlines, scan.Text())
+	}
+
+	return txtlines
 }

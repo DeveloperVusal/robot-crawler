@@ -1,6 +1,8 @@
 package core
 
-import "robot/app"
+import (
+	"robot/app"
+)
 
 type Robotgo struct{}
 

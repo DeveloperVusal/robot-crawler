@@ -17,6 +17,7 @@ func main() {
 		rb.Run()
 
 		delay = time.Second * 1
+
 		return
 	}
 

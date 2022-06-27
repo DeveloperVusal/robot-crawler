@@ -32,68 +32,105 @@ func (indx *Indexing) Run(id uint64, url string) {
 		matched, _ := regexp.MatchString(`^(text\/html|text\/plain)`, indx.Resp.Header.Get("Content-Type"))
 
 		if matched {
-			// Получаем Dom документ страницы
-			doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
+			rbtxt := &Robotstxt{
+				Domain_id:   indx.Domain_id,
+				IndexPgFind: []string{"*", "/", "?"},
+				IndexpgRepl: []string{".*", "\\/", "\\?"},
+			}
+			isValid, newUrl := rbtxt.UrlHandle(&indx.Resp.Url)
 
-			if err != nil {
-				log.Fatalln(err)
+			if newUrl != indx.Resp.Url {
+				indx.Resp.Url = newUrl
 			}
 
-			filterFunc := Filter{}
+			if isValid {
+				// Получаем Dom документ страницы
+				doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
 
-			// Мета теги и Title
-			pageHead["title"] = doc.Find("title").Text()
-
-			meta_descr, _ := doc.Find("meta[name=description]").Attr("content")
-			pageHead["description"] = meta_descr
-
-			meta_keywords, _ := doc.Find("meta[name=keywords]").Attr("content")
-			pageHead["keywords"] = meta_keywords
-
-			// Заголовок h1
-			doc.Find("body").Each(func(i int, s *goquery.Selection) {
-				pageBody["h1"] = append(pageBody["h1"], s.Find("h1").Text())
-
-				s.Find("a").Each(func(ix int, sx *goquery.Selection) {
-					attrHref, _ := sx.Attr("href")
-					attrRel, _ := sx.Attr("rel")
-
-					if filterFunc.IsValidLink(attrHref, indx.Domain_full) && attrRel != "nofollow" {
-						pageLinks = append(pageLinks, attrHref)
-					}
-				})
-			})
-
-			// Получаем уникальные ссылки
-			pageLinks = filterFunc.SliceStrUnique(pageLinks)
-
-			// Содержание страницы
-			indx.GetContent(doc, &pageContent)
-
-			pageContent = filterFunc.SliceStrUnique(pageContent)
-			pageBody["content"] = append(pageBody["content"], strings.Join(pageContent[:], " "))
-
-			isUpdatePage := indx.PageUpdate(&id, map[string]string{
-				"url":              url,
-				"meta_title":       pageHead["title"],
-				"meta_description": pageHead["description"],
-				"meta_keywords":    pageHead["keywords"],
-				"page_h1":          pageBody["h1"][0],
-				"page_text":        pageBody["content"][0],
-			})
-
-			if isUpdatePage {
-				// Добавляем ссылки в очередь
-				for k := range pageLinks {
-					appqueue.AddUrlQueue(pageLinks[k], indx.Domain_id, indx.Domain_full)
+				if err != nil {
+					log.Fatalln(err)
 				}
 
-				// Указываем заврешении индексации
-				appqueue.SetQueue(indx.QueueId, 1, 2)
-			} else {
-				// Указываем в очереди о недоступности индексирования
-				// страница не была обновлена в базе
-				appqueue.SetQueue(indx.QueueId, 600, 500)
+				filterFunc := Filter{}
+
+				meta_robots, _ := doc.Find("meta[name=robots]").Attr("content")
+				isNoindex := true
+				isNofollow := true
+
+				if len(meta_robots) > 3 {
+					if strings.Contains(meta_robots, "noindex") || strings.Contains(meta_robots, "nofollow") {
+						isNoindex, _ = regexp.MatchString(`noindex`, meta_robots)
+						isNofollow, _ = regexp.MatchString(`nofollow`, meta_robots)
+					}
+				}
+
+				// Если индексация доступна
+				if isNoindex {
+					// Мета теги и Title
+					pageHead["title"] = doc.Find("title").Text()
+
+					meta_descr, _ := doc.Find("meta[name=description]").Attr("content")
+					pageHead["description"] = meta_descr
+
+					meta_keywords, _ := doc.Find("meta[name=keywords]").Attr("content")
+					pageHead["keywords"] = meta_keywords
+
+					// Заголовок h1
+					doc.Find("body").Each(func(i int, s *goquery.Selection) {
+						pageBody["h1"] = append(pageBody["h1"], strings.Trim(s.Find("h1").Text(), " \t\r\n"))
+
+						// Если переход по ссылкам доступен
+						if isNofollow {
+							s.Find("a").Each(func(ix int, sx *goquery.Selection) {
+								attrHref, _ := sx.Attr("href")
+								attrRel, _ := sx.Attr("rel")
+
+								if filterFunc.IsValidLink(attrHref, indx.Domain_full) && attrRel != "nofollow" {
+									pageLinks = append(pageLinks, attrHref)
+								}
+							})
+						}
+					})
+
+					// Если переход по ссылкам доступен
+					if isNofollow {
+						// Получаем уникальные ссылки
+						pageLinks = filterFunc.SliceStrUnique(pageLinks)
+					}
+
+					// Содержание страницы
+					indx.GetContent(doc, &pageContent)
+
+					pageContent = filterFunc.SliceStrUnique(pageContent)
+					pageBody["content"] = append(pageBody["content"], strings.Trim(strings.Join(pageContent[:], " "), " \t\r\n"))
+
+					isUpdatePage := indx.PageUpdate(&id, map[string]string{
+						"url":              url,
+						"meta_title":       pageHead["title"],
+						"meta_description": pageHead["description"],
+						"meta_keywords":    pageHead["keywords"],
+						"page_h1":          pageBody["h1"][0],
+						"page_text":        pageBody["content"][0],
+					})
+
+					// Если данные о странице были обновлены
+					if isUpdatePage {
+						// Добавляем ссылки в очередь
+						for k := range pageLinks {
+							appqueue.AddUrlQueue(pageLinks[k], indx.Domain_id, indx.Domain_full)
+						}
+
+						// Указываем заврешении индексации
+						appqueue.SetQueue(indx.QueueId, 1, 2)
+					} else {
+						// Указываем в очереди о недоступности индексирования
+						// страница не была обновлена в базе
+						appqueue.SetQueue(indx.QueueId, 600, 500)
+					}
+				} else {
+					// Указываем заврешении индексации
+					appqueue.SetQueue(indx.QueueId, 1, 2)
+				}
 			}
 		} else {
 			// Удаляем страницу из индексации

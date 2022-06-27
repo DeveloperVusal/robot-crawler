@@ -52,15 +52,15 @@ func (q *Queue) IsQueue() {
 		}
 
 		srchdb := &SearchDB{}
-		idPage, isPage := srchdb.IsWebPageBase(&url)
+		idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
 
 		// Если такой url есть в базе
 		if isPage {
 			// Запускаем индексацию
-			go indx.Run(idPage, url)
+			go indx.Run(idPage, resp.Url)
 		} else { // Иначе
 			// Добавляем url в базу
-			lastInsertId, origUrl := srchdb.AddWebPageBase(&domain_id, &url, resp)
+			lastInsertId, origUrl := srchdb.AddWebPageBase(&domain_id, resp)
 
 			// Если url добавлен
 			if lastInsertId > 0 {
@@ -74,7 +74,7 @@ func (q *Queue) IsQueue() {
 }
 
 // Метод статус страницы в очереди
-func (q *Queue) SetQueue(id uint64, status int, handler int) {
+func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
 	// Подключаемся к БД
 	db := dbpkg.Database{}
 	dbn, err := db.ConnMySQL("mysql")
@@ -87,7 +87,7 @@ func (q *Queue) SetQueue(id uint64, status int, handler int) {
 	defer dbn.Close()
 
 	// Обновляем статус в очереди
-	_, err2 := dbn.Exec("UPDATE `queue_pages` SET status = ?, handler = ? WHERE id = ?", status, handler, id)
+	_, err2 := dbn.Exec("UPDATE `queue_pages` SET status = ?, handler = ? WHERE id = ?", _status, _handler, id)
 
 	if err2 != nil {
 		log.Fatalln(err2)

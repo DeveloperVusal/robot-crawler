@@ -1,7 +1,9 @@
 package app
 
 import (
+	"log"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 )
@@ -57,4 +59,64 @@ func (f *Filter) SliceStrUnique(sl []string) []string {
 	}
 
 	return list
+}
+
+func (f *Filter) Substr(input string, start int, length int) string {
+	asRunes := []rune(input)
+
+	if start >= len(asRunes) {
+		return ""
+	}
+
+	if start+length > len(asRunes) {
+		length = len(asRunes) - start
+	}
+
+	return string(asRunes[start : start+length])
+}
+
+func (f *Filter) RemoveSliceStr(slice []string, i int) []string {
+	return append(slice[:i], slice[i+1:]...)
+}
+
+func (f *Filter) ItemExists(arrayType interface{}, item interface{}) bool {
+	arr := reflect.ValueOf(arrayType)
+
+	if arr.Kind() != reflect.Array {
+		log.Fatalln("Invalid data-type")
+	}
+
+	for i := 0; i < arr.Len(); i++ {
+		if arr.Index(i).Interface() == item {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (f *Filter) FilterSliceStr(slice []string, condition string) []string {
+	pos := []string{}
+
+	for i := range slice {
+		if slice[i] == condition {
+			pos = append(pos, slice[i])
+		}
+	}
+
+	return pos
+}
+
+func (f *Filter) ReplaceArrayStr(slice string, find *[]string, repl *[]string) string {
+	result := slice
+
+	for key := range *find {
+		result = strings.ReplaceAll(result, (*find)[key], (*repl)[key])
+	}
+
+	return result
+}
+
+func (f *Filter) Unlist(x []string) (string, string) {
+	return x[0], x[1]
 }
