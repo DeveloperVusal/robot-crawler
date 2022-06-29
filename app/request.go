@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -32,7 +33,11 @@ func (rq *Request) GetPageData(url *string) PageReqData {
 		log.Fatal("Error loading .env file")
 	}
 
-	client := &http.Client{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := &http.Client{Transport: tr}
 
 	req, err := http.NewRequest("GET", *url, nil)
 
@@ -115,7 +120,11 @@ func (rq *Request) IsRequestLimit(url *string) bool {
 
 // Метод скачивает и получает содержимое файла (txt, csv и др.)
 func (rq *Request) GetReadFile(url *string) []string {
-	client := http.Client{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := &http.Client{Transport: tr}
 	resp, err := client.Get(*url)
 
 	if err != nil {
