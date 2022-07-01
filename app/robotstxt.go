@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +17,8 @@ import (
 )
 
 type Robotstxt struct {
+	DBLink      *sql.DB
+	Ctx         context.Context
 	Domain_id   uint64
 	IndexPgFind []string
 	IndexpgRepl []string
@@ -24,8 +28,6 @@ type Robotstxt struct {
 func (r *Robotstxt) UrlHandle(link *string) (bool, string) {
 	uParseDom, _ := url.Parse(*link)
 	filename := uParseDom.Scheme + "://" + uParseDom.Host + "/robots.txt"
-	fmt.Println("link", *link)
-	fmt.Println("filename", filename)
 
 	robotsData := r.get(&filename)
 	userAgent := os.Getenv("BOT_USERAGENT")
@@ -95,7 +97,10 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 	var rulesRobots map[string][]map[string][]string
 
 	if rbData == "" {
-		req := Request{}
+		req := Request{
+			DBLink: r.DBLink,
+			Ctx:    r.Ctx,
+		}
 		rbtxtxData := req.GetReadFile(filename)
 
 		rulesRobots = r.parse(&rbtxtxData)

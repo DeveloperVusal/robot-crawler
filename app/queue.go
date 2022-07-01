@@ -1,28 +1,27 @@
 package app
 
 import (
+	"context"
+	"database/sql"
 	"log"
 	neturl "net/url"
-	dbpkg "robot/database"
+	"time"
 )
 
-type Queue struct{}
+type Queue struct {
+	DBLink *sql.DB
+	Ctx    context.Context
+}
 
 // Метод проверяет и запускает индексацию страниц в очереди
 func (q *Queue) IsQueue() {
-	// Подключаемся к БД
-	db := dbpkg.Database{}
-	dbn, err := db.ConnMySQL("mysql")
+	dbn := q.DBLink
+	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
-	// Если есть ошибки выводим в лог
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer dbn.Close()
+	defer cancelfunc()
 
 	// Проверяет пуста ли очередь
-	rows, err := dbn.Query("CALL queue_handle();")
+	rows, err := dbn.QueryContext(ctx, "CALL queue_handle();")
 
 	if err != nil {
 		log.Fatalln(err)
@@ -47,22 +46,29 @@ func (q *Queue) IsQueue() {
 	}
 
 	if isContinue {
-		req := &Request{}
+		req := &Request{
+			DBLink: q.DBLink,
+			Ctx:    q.Ctx,
+		}
 
 		// Если есть, что запустить в обработку
 		if id > 0 && req.IsRequestLimit(&url) {
 			q.SetQueue(id, 0, 1) // Включаем обработку url
 
-			req := &Request{}
 			resp := req.GetPageData(&url) // Делаем запрос и получаем данные url
 			indx := &Indexing{
+				DBLink:      q.DBLink,
+				Ctx:         q.Ctx,
 				QueueId:     id,
 				Domain_id:   domain_id,
 				Domain_full: domain_full,
 				Resp:        &resp,
 			}
 
-			srchdb := &SearchDB{}
+			srchdb := &SearchDB{
+				DBLink: q.DBLink,
+				Ctx:    q.Ctx,
+			}
 			idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
 
 			// Если такой url есть в базе
@@ -91,19 +97,13 @@ func (q *Queue) IsQueue() {
 
 // Метод статус страницы в очереди
 func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
-	// Подключаемся к БД
-	db := dbpkg.Database{}
-	dbn, err := db.ConnMySQL("mysql")
+	dbn := q.DBLink
+	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
-	// Если есть ошибки выводим в лог
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer dbn.Close()
+	defer cancelfunc()
 
 	// Обновляем статус в очереди
-	_, err2 := dbn.Exec("UPDATE `queue_pages` SET status = ?, handler = ?, thread_time = NOW() WHERE id = ?", _status, _handler, id)
+	_, err2 := dbn.ExecContext(ctx, "UPDATE `queue_pages` SET status = ?, handler = ?, thread_time = NOW() WHERE id = ?", _status, _handler, id)
 
 	if err2 != nil {
 		log.Fatalln(err2)
@@ -112,16 +112,10 @@ func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
 
 // Пропустить зависшую страницу в очереди
 func (q *Queue) ContinueQueue() {
-	// Подключаемся к БД
-	db := dbpkg.Database{}
-	dbn, err := db.ConnMySQL("mysql")
+	dbn := q.DBLink
+	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
-	// Если есть ошибки выводим в лог
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer dbn.Close()
+	defer cancelfunc()
 
 	// Проверяем имеются ли в очереди страницы зависщие на более 5 минут
 	var id uint64
@@ -134,7 +128,7 @@ func (q *Queue) ContinueQueue() {
 			handler = 1 AND
 			UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time) >= 300`
 
-	rows, err2 := dbn.Query(sql)
+	rows, err2 := dbn.QueryContext(ctx, sql)
 
 	if err2 != nil {
 		log.Fatalln(err2)
@@ -151,20 +145,14 @@ func (q *Queue) ContinueQueue() {
 
 // Метод добавляет страницу в очередь на обработку
 func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
-	// Подключаемся к БД
-	db := dbpkg.Database{}
-	dbn, err := db.ConnMySQL("mysql")
+	dbn := q.DBLink
+	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
-	// Если есть ошибки выводим в лог
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer dbn.Close()
+	defer cancelfunc()
 
 	// Проверяем не добавлена ли в очередь
 	var selID int
-	rows, err := dbn.Query("SELECT `id` FROM `queue_pages` WHERE `url` = ?", url)
+	rows, err := dbn.QueryContext(ctx, "SELECT `id` FROM `queue_pages` WHERE `url` = ?", url)
 
 	if err != nil {
 		log.Fatalln(err)
@@ -181,7 +169,7 @@ func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 	// Если такого url нет в очереди
 	if selID <= 0 {
 		// Добавляем url в очередь
-		_, err := dbn.Exec("INSERT INTO queue_pages (domain_id, domain_full, url) VALUES (?, ?, ?)", domain_id, domain_full, url)
+		_, err := dbn.ExecContext(ctx, "INSERT INTO queue_pages (domain_id, domain_full, url) VALUES (?, ?, ?)", domain_id, domain_full, url)
 
 		if err != nil {
 			log.Fatalln(err)

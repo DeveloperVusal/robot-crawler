@@ -2,7 +2,9 @@ package app
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
+	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -10,12 +12,13 @@ import (
 	"os"
 	"time"
 
-	dbpkg "robot/database"
-
 	"github.com/joho/godotenv"
 )
 
-type Request struct{}
+type Request struct {
+	DBLink *sql.DB
+	Ctx    context.Context
+}
 
 type PageReqData struct {
 	Url        string
@@ -67,16 +70,10 @@ func (rq *Request) GetPageData(url *string) PageReqData {
 func (rq *Request) IsRequestLimit(url *string) bool {
 	startTime := time.Now().Unix()
 
-	// Подключаемся к БД
-	db := dbpkg.Database{}
-	dbn, err := db.ConnMySQL("mysql")
+	dbn := rq.DBLink
+	ctx, cancelfunc := context.WithTimeout(rq.Ctx, 180*time.Second)
 
-	// Если есть ошибки выводим в лог
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer dbn.Close()
+	defer cancelfunc()
 
 	var limSeconds int = 1
 	var limQty int = 3
@@ -90,7 +87,7 @@ func (rq *Request) IsRequestLimit(url *string) bool {
 				(UNIX_TIMESTAMP(CURTIME(3)) - UNIX_TIMESTAMP(created_at)) < ?`
 
 	for {
-		err = dbn.QueryRow(sql, limSeconds).Scan(&limResCount)
+		err := dbn.QueryRowContext(ctx, sql, limSeconds).Scan(&limResCount)
 
 		if err != nil {
 			log.Fatalln(err)

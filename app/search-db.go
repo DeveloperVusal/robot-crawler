@@ -1,12 +1,17 @@
 package app
 
 import (
+	"context"
+	"database/sql"
 	"log"
 	"regexp"
 	dbpkg "robot/database"
 )
 
-type SearchDB struct{}
+type SearchDB struct {
+	DBLink *sql.DB
+	Ctx    context.Context
+}
 
 // Метод проверяет имется ли страница в базе для поиска
 func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
@@ -37,6 +42,8 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint
 
 		if matched {
 			rbtxt := &Robotstxt{
+				DBLink:      srdb.DBLink,
+				Ctx:         srdb.Ctx,
 				Domain_id:   *domain_id,
 				IndexPgFind: []string{"*", "/", "?"},
 				IndexpgRepl: []string{".*", "\\/", "\\?"},

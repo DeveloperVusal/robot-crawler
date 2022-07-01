@@ -13,7 +13,7 @@ import (
 type Database struct{}
 
 // Метод подключения к БД MySQL
-func (db *Database) ConnMySQL(serverName string) (*sql.DB, error) {
+func (db *Database) ConnMySQL(serverName string) (context.Context, *sql.DB, error) {
 	cfg := config.ConfigDatabaseLoad()
 
 	var driverName string = ""
@@ -28,7 +28,11 @@ func (db *Database) ConnMySQL(serverName string) (*sql.DB, error) {
 		}
 	}
 
-	return db.DriverMySQL(&driverName, &dataSourceName)
+	_db, err := db.DriverMySQL(&driverName, &dataSourceName)
+
+	_db.SetMaxOpenConns(30)
+
+	return context.Background(), _db, err
 }
 
 // Метод подключения к БД PgSQL

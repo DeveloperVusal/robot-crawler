@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"log"
 	"regexp"
 	"strings"
@@ -13,6 +16,8 @@ import (
 )
 
 type Indexing struct {
+	DBLink      *sql.DB
+	Ctx         context.Context
 	QueueId     uint64
 	Domain_id   uint64
 	Domain_full string
@@ -26,13 +31,18 @@ func (indx *Indexing) Run(id uint64, url string) {
 	pageContent := []string{}
 	pageLinks := []string{}
 
-	appqueue := &Queue{}
+	appqueue := &Queue{
+		DBLink: indx.DBLink,
+		Ctx:    indx.Ctx,
+	}
 
 	if indx.Resp.StatusCode == 200 {
 		matched, _ := regexp.MatchString(`^(text\/html|text\/plain)`, indx.Resp.Header.Get("Content-Type"))
 
 		if matched {
 			rbtxt := &Robotstxt{
+				DBLink:      indx.DBLink,
+				Ctx:         indx.Ctx,
 				Domain_id:   indx.Domain_id,
 				IndexPgFind: []string{"*", "/", "?"},
 				IndexpgRepl: []string{".*", "\\/", "\\?"},
@@ -42,6 +52,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 			if len(newUrl) > 4 && newUrl != indx.Resp.Url {
 				indx.Resp.Url = newUrl
 			}
+
+			fmt.Println("link", indx.Resp.Url)
 
 			if isValid {
 				// Получаем Dom документ страницы
@@ -64,8 +76,12 @@ func (indx *Indexing) Run(id uint64, url string) {
 					}
 				}
 
+				// fmt.Println("Not nil - 1")
+
 				// Если индексация доступна
 				if isNoindex {
+					// fmt.Println("Not nil - 2")
+
 					// Мета теги и Title
 					pageHead["title"] = doc.Find("title").Text()
 
@@ -74,6 +90,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 					meta_keywords, _ := doc.Find("meta[name=keywords]").Attr("content")
 					pageHead["keywords"] = meta_keywords
+
+					// fmt.Println("Not nil - 3")
 
 					// Заголовок h1
 					doc.Find("body").Each(func(i int, s *goquery.Selection) {
@@ -92,6 +110,16 @@ func (indx *Indexing) Run(id uint64, url string) {
 						}
 					})
 
+					// fmt.Println("Not nil - 4")
+
+					if len(pageHead["title"]) > 2710 {
+						pageHead["title"] = filterFunc.Substr(pageHead["title"], 0, 2710)
+					}
+
+					if len(pageBody["h1"][0]) > 2710 {
+						pageBody["h1"][0] = filterFunc.Substr(pageBody["h1"][0], 0, 2710)
+					}
+
 					// Если переход по ссылкам доступен
 					if isNofollow {
 						// Получаем уникальные ссылки
@@ -100,6 +128,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 					// Содержание страницы
 					indx.GetContent(doc, &pageContent)
+
+					// fmt.Println("Not nil - 5")
 
 					pageContent = filterFunc.SliceStrUnique(pageContent)
 					pageBody["content"] = append(pageBody["content"], strings.Trim(strings.Join(pageContent[:], " "), " \t\r\n"))
@@ -112,6 +142,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 						"page_h1":          pageBody["h1"][0],
 						"page_text":        pageBody["content"][0],
 					})
+
+					// fmt.Println("Not nil - 6")
 
 					// Если данные о странице были обновлены
 					if isUpdatePage {
@@ -148,6 +180,9 @@ func (indx *Indexing) Run(id uint64, url string) {
 		// Страница не доступна
 		appqueue.SetQueue(indx.QueueId, indx.Resp.StatusCode, 500)
 	}
+
+	fmt.Println("")
+	// fmt.Println("")
 }
 
 // Метод получает содержимое/контент на странице
