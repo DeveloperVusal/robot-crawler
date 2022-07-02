@@ -16,6 +16,7 @@ func (rg *Robotgo) Run(ctx context.Context, mysql *sql.DB) {
 		Ctx:    ctx,
 	}
 
+	appqueue.ClearQueue()
 	appqueue.ContinueQueue()
 	appqueue.IsQueue()
 }

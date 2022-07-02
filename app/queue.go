@@ -143,6 +143,28 @@ func (q *Queue) ContinueQueue() {
 	}
 }
 
+//Очищаем старые обработанные url из очереди
+func (q *Queue) ClearQueue() {
+	dbn := q.DBLink
+	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
+
+	defer cancelfunc()
+
+	// Очищаем обработанные страницы в очереди более 3-х дней
+	_, err2 := dbn.ExecContext(ctx, `
+		DELETE
+		FROM queue_pages
+		WHERE
+			status != 0 AND
+			handler != 0 AND
+			UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time) >= 259200
+	`)
+
+	if err2 != nil {
+		log.Fatalln(err2)
+	}
+}
+
 // Метод добавляет страницу в очередь на обработку
 func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 	dbn := q.DBLink
