@@ -34,14 +34,21 @@ func (q *Queue) IsQueue() {
 
 	for rows.Next() {
 		rows.Scan(&id, &url, &domain_id, &domain_full)
-	}
 
+		if id > 0 {
+			q.HandleQueue(&id, &url, &domain_id, &domain_full)
+		}
+	}
+}
+
+// Обработка страницы из очереди
+func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_full *string) {
 	isContinue := true
-	_, errp := neturl.Parse(url)
+	_, errp := neturl.Parse(*url)
 
 	// Если в очередь попала не корректный url
 	if errp != nil {
-		q.SetQueue(id, 503, 0)
+		q.SetQueue(*id, 503, 0)
 		isContinue = false
 	}
 
@@ -52,16 +59,16 @@ func (q *Queue) IsQueue() {
 		}
 
 		// Если есть, что запустить в обработку
-		if id > 0 && req.IsRequestLimit(&url) {
-			q.SetQueue(id, 0, 1) // Включаем обработку url
+		if *id > 0 && req.IsRequestLimit(url) {
+			q.SetQueue(*id, 0, 1) // Включаем обработку url
 
-			resp := req.GetPageData(&url) // Делаем запрос и получаем данные url
+			resp := req.GetPageData(url) // Делаем запрос и получаем данные url
 			indx := &Indexing{
 				DBLink:      q.DBLink,
 				Ctx:         q.Ctx,
-				QueueId:     id,
-				Domain_id:   domain_id,
-				Domain_full: domain_full,
+				QueueId:     *id,
+				Domain_id:   *domain_id,
+				Domain_full: *domain_full,
 				Resp:        &resp,
 			}
 
@@ -78,17 +85,17 @@ func (q *Queue) IsQueue() {
 			} else { // Иначе
 				if len(resp.Url) > 4 {
 					// Добавляем url в базу
-					lastInsertId, origUrl := srchdb.AddWebPageBase(&domain_id, &resp)
+					lastInsertId, origUrl := srchdb.AddWebPageBase(domain_id, &resp)
 
 					// Если url добавлен
 					if lastInsertId > 0 {
 						// Запускаем индексацию
 						go indx.Run(lastInsertId, origUrl)
 					} else {
-						q.SetQueue(id, 500, 2) // Пропускаем url
+						q.SetQueue(*id, 500, 2) // Пропускаем url
 					}
 				} else {
-					q.SetQueue(id, 501, 2) // Пропускаем url
+					q.SetQueue(*id, 501, 2) // Пропускаем url
 				}
 			}
 		}
