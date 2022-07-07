@@ -9,7 +9,7 @@ import (
 type Robotgo struct{}
 
 // Метод запускает работу робота
-// Вызывает метод app.Queue.IsQueue()
+// Вызывает метод app.Queue.RunQueue()
 func (rg *Robotgo) Run(ctx context.Context, mysql *sql.DB) {
 	appqueue := &app.Queue{
 		DBLink: mysql,
@@ -18,5 +18,5 @@ func (rg *Robotgo) Run(ctx context.Context, mysql *sql.DB) {
 
 	appqueue.ClearQueue()
 	appqueue.ContinueQueue()
-	appqueue.IsQueue()
+	appqueue.RunQueue()
 }

@@ -14,7 +14,7 @@ type Queue struct {
 }
 
 // Метод проверяет и запускает индексацию страниц в очереди
-func (q *Queue) IsQueue() {
+func (q *Queue) RunQueue() {
 	dbn := q.DBLink
 	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
