@@ -58,7 +58,7 @@ func (r *Robotstxt) UrlHandle(link *string) (bool, string) {
 // Получаем содержимое robots.txt валидное для ButaGoBot
 func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 	db := dbpkg.Database{}
-	ctx, dbn, err := db.ConnPgSQL("pgsql")
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
 		log.Fatalln(err)

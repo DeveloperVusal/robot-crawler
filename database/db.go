@@ -3,10 +3,13 @@ package database
 import (
 	"context"
 	"database/sql"
+	"net/url"
 
 	config "robot/config"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgconn/stmtcache"
 	"github.com/jackc/pgx/v4"
 )
 
@@ -44,12 +47,19 @@ func (db *Database) ConnPgSQL(serverName string) (context.Context, *pgx.Conn, er
 	for key := range cfg {
 		if key == "pgsql" {
 			if cfg[key]["servname"] == serverName {
+				cfg[key]["password"] = url.QueryEscape(cfg[key]["password"])
+
 				dataSourceName = "postgres://" + cfg[key]["username"] + ":" + cfg[key]["password"] + "@" + cfg[key]["host"] + ":" + cfg[key]["port"] + "/" + cfg[key]["dbname"]
 			}
 		}
 	}
 
-	_db, _err := db.DriverPgSQL(&dataSourceName)
+	config, _ := pgx.ParseConfig(dataSourceName)
+	config.BuildStatementCache = func(conn *pgconn.PgConn) stmtcache.Cache {
+		return stmtcache.New(conn, stmtcache.ModeDescribe, 1024)
+	}
+
+	_db, _err := db.DriverPgSQL(config)
 
 	return context.Background(), _db, _err
 
@@ -61,6 +71,6 @@ func (db *Database) DriverMySQL(driverName *string, dataSourceame *string) (*sql
 }
 
 // Вызов драйвера pgsql
-func (db *Database) DriverPgSQL(dataSourceame *string) (*pgx.Conn, error) {
-	return pgx.Connect(context.Background(), *dataSourceame)
+func (db *Database) DriverPgSQL(config *pgx.ConnConfig) (*pgx.Conn, error) {
+	return pgx.ConnectConfig(context.Background(), config)
 }

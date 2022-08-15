@@ -235,7 +235,7 @@ func (indx *Indexing) ChildrenNodes(s *goquery.Selection, output *[]string) {
 // Метод обновляет данные индексируемой страницы
 func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 	db := dbpkg.Database{}
-	ctx, dbn, err := db.ConnPgSQL("pgsql")
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
 		log.Fatalln(err)
@@ -303,7 +303,7 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 // Метод отключает страницу из индекса
 func (indx *Indexing) PageDisableIndex(id *uint64) {
 	db := dbpkg.Database{}
-	ctx, dbn, err := db.ConnPgSQL("pgsql")
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
 		log.Fatalln(err)
@@ -333,7 +333,7 @@ func (indx *Indexing) PageDisableIndex(id *uint64) {
 // Метод удаляет страницу из индекса
 func (indx *Indexing) PageDeleteIndex(id *uint64, status_code *int) {
 	db := dbpkg.Database{}
-	ctx, dbn, err := db.ConnPgSQL("pgsql")
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
 		log.Fatalln(err)

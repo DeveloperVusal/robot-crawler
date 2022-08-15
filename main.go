@@ -21,7 +21,7 @@ func init() {
 	db := dbpkg.Database{}
 
 	// Подключаемся к БД
-	ctx, dbn, err = db.ConnMySQL("mysql")
+	ctx, dbn, err = db.ConnMySQL("rw_mysql_dbqueue")
 
 	// Если есть ошибки выводим в лог
 	if err != nil {

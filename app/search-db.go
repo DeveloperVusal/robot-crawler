@@ -16,7 +16,7 @@ type SearchDB struct {
 // Метод проверяет имется ли страница в базе для поиска
 func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
 	db := dbpkg.Database{}
-	ctx, dbn, err := db.ConnPgSQL("pgsql")
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
 		log.Fatalln(err)
@@ -57,7 +57,7 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint
 			if isValid {
 
 				db := dbpkg.Database{}
-				ctx, dbn, err := db.ConnPgSQL("pgsql")
+				ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 				if err != nil {
 					log.Fatalln(err)

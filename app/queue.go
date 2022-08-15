@@ -102,7 +102,7 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 	}
 }
 
-// Метод статус страницы в очереди
+// Метод устанвливает статус страницы в очереди
 func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
 	dbn := q.DBLink
 	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
@@ -179,7 +179,7 @@ func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 
 	defer cancelfunc()
 
-	// Проверяем не добавлена ли в очередь
+	// Проверяем не добавлена ли страница в очередь
 	var selID int
 	rows, err := dbn.QueryContext(ctx, "SELECT `id` FROM `queue_pages` WHERE `url` = ?", url)
 
