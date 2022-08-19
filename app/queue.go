@@ -150,7 +150,7 @@ func (q *Queue) ContinueQueue() {
 	}
 }
 
-//Очищаем старые обработанные url из очереди
+// Очищаем старые обработанные url из очереди
 func (q *Queue) ClearQueue() {
 	dbn := q.DBLink
 	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
