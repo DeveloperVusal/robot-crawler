@@ -164,7 +164,7 @@ func (q *Queue) ClearQueue() {
 		WHERE
 			status != 0 AND
 			handler != 0 AND
-			UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time) >= 259200
+			(UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time)) >= 259200
 	`)
 
 	if err2 != nil {
