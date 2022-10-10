@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"regexp"
@@ -61,7 +60,8 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer dbn.Close(ctx)
@@ -77,7 +77,8 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 	rows, err := dbn.Query(ctx, sql, r.Domain_id)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer rows.Close()
@@ -86,12 +87,14 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 		err = rows.Scan(&rbData)
 
 		if err != nil {
-			log.Fatalln(err)
+			log := &Logs{}
+			log.LogWrite(err)
 		}
 	}
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	var rulesRobots map[string][]map[string][]string
@@ -120,7 +123,8 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 			res, err := dbn.Exec(ctx, sql, int(r.Domain_id), string(jsonStr))
 
 			if err != nil {
-				log.Fatalln(err)
+				log := &Logs{}
+				log.LogWrite(err)
 			}
 
 			_ = res.RowsAffected()
@@ -137,7 +141,8 @@ func (r *Robotstxt) parse(data *[]string) map[string][]map[string][]string {
 	var err = godotenv.Load()
 
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	userAgent := os.Getenv("BOT_USERAGENT")

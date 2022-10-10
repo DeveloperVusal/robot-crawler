@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
@@ -60,7 +59,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 				doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
 
 				if err != nil {
-					log.Fatalln(err)
+					log := &Logs{}
+					log.LogWrite(err)
 				}
 
 				filterFunc := Filter{}
@@ -238,7 +238,8 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer dbn.Close(ctx)
@@ -262,7 +263,8 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 	res, err := dbn.Exec(ctx, sql, *id, details["url"], details["meta_title"], details["meta_description"], details["meta_keywords"], details["page_h1"], details["page_text"])
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	_ = res.RowsAffected()
@@ -292,7 +294,8 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 	res2, err2 := dbn.Exec(ctx, sql2, *id)
 
 	if err2 != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err2)
 	}
 
 	_ = res2.RowsAffected()
@@ -306,7 +309,8 @@ func (indx *Indexing) PageDisableIndex(id *uint64) {
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer dbn.Close(ctx)
@@ -324,7 +328,8 @@ func (indx *Indexing) PageDisableIndex(id *uint64) {
 	res, err := dbn.Exec(ctx, sql, *id)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	_ = res.RowsAffected()
@@ -336,7 +341,8 @@ func (indx *Indexing) PageDeleteIndex(id *uint64, status_code *int) {
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer dbn.Close(ctx)
@@ -356,7 +362,8 @@ func (indx *Indexing) PageDeleteIndex(id *uint64, status_code *int) {
 	res, err := dbn.Exec(ctx, sql, *id, *status_code)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	_ = res.RowsAffected()

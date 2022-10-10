@@ -3,12 +3,15 @@ package app
 import (
 	"log"
 	"os"
+	"path/filepath"
 )
 
 type Logs struct{}
 
 func (l *Logs) LogWrite(err2 error) {
-	f, err := os.OpenFile("./../logs/app.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	fl, _ := os.Getwd()
+	filename := filepath.Join(filepath.Dir(fl), filepath.Base(fl), "/logs/app.log")
+	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
@@ -18,5 +21,4 @@ func (l *Logs) LogWrite(err2 error) {
 
 	log.SetOutput(f)
 	log.Println(err2)
-	log.Println("===========================================")
 }

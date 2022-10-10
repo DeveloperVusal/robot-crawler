@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -29,11 +28,12 @@ type PageReqData struct {
 }
 
 // Метод получает данные запрашиваемого url адреса
-func (rq *Request) GetPageData(url *string) PageReqData {
+func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 	var err = godotenv.Load()
 
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	tr := &http.Transport{
@@ -45,7 +45,8 @@ func (rq *Request) GetPageData(url *string) PageReqData {
 	req, err := http.NewRequest("GET", *url, nil)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	req.Header.Set("User-Agent", os.Getenv("BOT_USERAGENT"))
@@ -54,7 +55,10 @@ func (rq *Request) GetPageData(url *string) PageReqData {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
+
+		return PageReqData{}, false
 	}
 
 	return PageReqData{
@@ -63,7 +67,7 @@ func (rq *Request) GetPageData(url *string) PageReqData {
 		Header:     resp.Header,
 		StatusCode: resp.StatusCode,
 		Status:     resp.Status,
-	}
+	}, true
 }
 
 // Метод фиксирует лимиты запросов в n секунд
@@ -90,20 +94,23 @@ func (rq *Request) IsRequestLimit(url *string) bool {
 		err := dbn.QueryRowContext(ctx, sql, limSeconds).Scan(&limResCount)
 
 		if err != nil {
-			log.Fatalln(err)
+			log := &Logs{}
+			log.LogWrite(err)
 		}
 
 		if limResCount < limQty {
 			_, err := dbn.Exec("INSERT INTO requests_limit (url) VALUES (?)", url)
 
 			if err != nil {
-				log.Fatalln(err)
+				log := &Logs{}
+				log.LogWrite(err)
 			}
 
 			_, err2 := dbn.Exec("DELETE FROM `requests_limit` WHERE (UNIX_TIMESTAMP(CURTIME(3)) - UNIX_TIMESTAMP(created_at)) > ?", limSeconds)
 
 			if err2 != nil {
-				log.Fatalln(err)
+				log := &Logs{}
+				log.LogWrite(err2)
 			}
 
 			return true
@@ -125,7 +132,8 @@ func (rq *Request) GetReadFile(url *string) []string {
 	resp, err := client.Get(*url)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer resp.Body.Close()

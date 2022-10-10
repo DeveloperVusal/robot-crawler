@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"database/sql"
-	"log"
 	"regexp"
 	dbpkg "robot/database"
 )
@@ -19,7 +18,8 @@ func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	defer dbn.Close(ctx)
@@ -60,7 +60,8 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint
 				ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 				if err != nil {
-					log.Fatalln(err)
+					log := &Logs{}
+					log.LogWrite(err)
 				}
 
 				defer dbn.Close(ctx)
@@ -91,7 +92,8 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint
 				err = dbn.QueryRow(ctx, sql, *domain_id, resp.Url, resp.StatusCode).Scan(&insertId)
 
 				if err != nil {
-					log.Fatalln(err)
+					log := &Logs{}
+					log.LogWrite(err)
 				}
 
 				return insertId, resp.Url

@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"database/sql"
-	"log"
 	neturl "net/url"
 	"time"
 )
@@ -24,7 +23,8 @@ func (q *Queue) RunQueue() {
 	rows, err := dbn.QueryContext(ctx, "CALL queue_handle();")
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	var id uint64
@@ -50,6 +50,9 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 	if errp != nil {
 		q.SetQueue(*id, 503, 0)
 		isContinue = false
+
+		log := &Logs{}
+		log.LogWrite(errp)
 	}
 
 	if isContinue {
@@ -62,40 +65,43 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 		if *id > 0 && req.IsRequestLimit(url) {
 			q.SetQueue(*id, 0, 1) // Включаем обработку url
 
-			resp := req.GetPageData(url) // Делаем запрос и получаем данные url
-			indx := &Indexing{
-				DBLink:      q.DBLink,
-				Ctx:         q.Ctx,
-				QueueId:     *id,
-				Domain_id:   *domain_id,
-				Domain_full: *domain_full,
-				Resp:        &resp,
-			}
+			resp, disable := req.GetPageData(url) // Делаем запрос и получаем данные url
 
-			srchdb := &SearchDB{
-				DBLink: q.DBLink,
-				Ctx:    q.Ctx,
-			}
-			idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
+			if disable {
+				indx := &Indexing{
+					DBLink:      q.DBLink,
+					Ctx:         q.Ctx,
+					QueueId:     *id,
+					Domain_id:   *domain_id,
+					Domain_full: *domain_full,
+					Resp:        &resp,
+				}
 
-			// Если такой url есть в базе
-			if isPage {
-				// Запускаем индексацию
-				go indx.Run(idPage, resp.Url)
-			} else { // Иначе
-				if len(resp.Url) > 4 {
-					// Добавляем url в базу
-					lastInsertId, origUrl := srchdb.AddWebPageBase(domain_id, &resp)
+				srchdb := &SearchDB{
+					DBLink: q.DBLink,
+					Ctx:    q.Ctx,
+				}
+				idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
 
-					// Если url добавлен
-					if lastInsertId > 0 {
-						// Запускаем индексацию
-						go indx.Run(lastInsertId, origUrl)
+				// Если такой url есть в базе
+				if isPage {
+					// Запускаем индексацию
+					go indx.Run(idPage, resp.Url)
+				} else { // Иначе
+					if len(resp.Url) > 4 {
+						// Добавляем url в базу
+						lastInsertId, origUrl := srchdb.AddWebPageBase(domain_id, &resp)
+
+						// Если url добавлен
+						if lastInsertId > 0 {
+							// Запускаем индексацию
+							go indx.Run(lastInsertId, origUrl)
+						} else {
+							q.SetQueue(*id, 500, 2) // Пропускаем url
+						}
 					} else {
-						q.SetQueue(*id, 500, 2) // Пропускаем url
+						q.SetQueue(*id, 501, 2) // Пропускаем url
 					}
-				} else {
-					q.SetQueue(*id, 501, 2) // Пропускаем url
 				}
 			}
 		}
@@ -113,7 +119,8 @@ func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
 	_, err2 := dbn.ExecContext(ctx, "UPDATE `queue_pages` SET status = ?, handler = ?, thread_time = NOW() WHERE id = ?", _status, _handler, id)
 
 	if err2 != nil {
-		log.Fatalln(err2)
+		log := &Logs{}
+		log.LogWrite(err2)
 	}
 }
 
@@ -138,7 +145,8 @@ func (q *Queue) ContinueQueue() {
 	rows, err2 := dbn.QueryContext(ctx, sql)
 
 	if err2 != nil {
-		log.Fatalln(err2)
+		log := &Logs{}
+		log.LogWrite(err2)
 	}
 
 	for rows.Next() {
@@ -168,7 +176,8 @@ func (q *Queue) ClearQueue() {
 	`)
 
 	if err2 != nil {
-		log.Fatalln(err2)
+		log := &Logs{}
+		log.LogWrite(err2)
 	}
 }
 
@@ -184,14 +193,16 @@ func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 	rows, err := dbn.QueryContext(ctx, "SELECT `id` FROM `queue_pages` WHERE `url` = ?", url)
 
 	if err != nil {
-		log.Fatalln(err)
+		log := &Logs{}
+		log.LogWrite(err)
 	}
 
 	for rows.Next() {
 		err := rows.Scan(&selID)
 
 		if err != nil {
-			log.Fatalln(err)
+			log := &Logs{}
+			log.LogWrite(err)
 		}
 	}
 
@@ -201,7 +212,8 @@ func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 		_, err := dbn.ExecContext(ctx, "INSERT INTO queue_pages (domain_id, domain_full, url) VALUES (?, ?, ?)", domain_id, domain_full, url)
 
 		if err != nil {
-			log.Fatalln(err)
+			log := &Logs{}
+			log.LogWrite(err)
 		}
 	}
 }
