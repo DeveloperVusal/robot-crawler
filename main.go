@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"log"
 	"time"
 
+	"robot/app"
 	"robot/core"
 	dbpkg "robot/database"
 
@@ -25,7 +25,8 @@ func init() {
 
 	// Если есть ошибки выводим в лог
 	if err != nil {
-		log.Fatalln(err)
+		log := &app.Logs{}
+		log.LogWrite(err)
 	}
 }
 
@@ -43,6 +44,9 @@ func main() {
 	}
 
 	if err := evio.Serve(events, "tcp://localhost:5000"); err != nil {
+		log := &app.Logs{}
+		log.LogWrite(err)
+
 		panic(err.Error())
 	}
 }
