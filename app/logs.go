@@ -4,13 +4,17 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	cfg "robot/config"
 )
 
 type Logs struct{}
 
 func (l *Logs) LogWrite(err2 error) {
-	fl, _ := os.Getwd()
-	filename := filepath.Join(filepath.Dir(fl), filepath.Base(fl), "/logs/app.log")
+	appConfig := &cfg.AppConfig{}
+	projectPath := appConfig.Get("projectPath")
+
+	filename := filepath.Join(projectPath, "/logs/app.log")
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 
 	if err != nil {

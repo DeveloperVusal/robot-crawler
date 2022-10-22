@@ -3,13 +3,24 @@ package config
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
 
 // Метод получает данные для подключения к БД
 func ConfigDatabaseLoad() map[string]map[string]string {
-	var err = godotenv.Load()
+	appConfig := &AppConfig{}
+	projectPath := appConfig.Get("projectPath")
+
+	if projectPath == "" {
+		fl, _ := os.Getwd()
+		projectPath = filepath.Join(filepath.Dir(fl), filepath.Base(fl))
+	}
+
+	filename := filepath.Join(projectPath, "/.env")
+
+	var err = godotenv.Load(filename)
 
 	if err != nil {
 		log.Fatal("Error loading .env file")
