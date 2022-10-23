@@ -140,7 +140,7 @@ func (q *Queue) ContinueQueue() {
 		WHERE
 			status = 0 AND
 			handler = 1 AND
-			UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time) >= 300`
+			(UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time)) >= 300`
 
 	rows, err2 := dbn.QueryContext(ctx, sql)
 
@@ -151,10 +151,10 @@ func (q *Queue) ContinueQueue() {
 
 	for rows.Next() {
 		rows.Scan(&id)
-	}
 
-	if id > 0 {
-		q.SetQueue(id, 700, 0)
+		if id > 0 {
+			q.SetQueue(id, 700, 0)
+		}
 	}
 }
 
