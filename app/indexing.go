@@ -92,8 +92,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 					meta_keywords, _ := doc.Find("meta[name=keywords]").Attr("content")
 					pageHead["keywords"] = meta_keywords
 
-					// fmt.Println("Not nil - 3")
-
 					// Заголовок h1
 					doc.Find("body").Each(func(i int, s *goquery.Selection) {
 						pageBody["h1"] = append(pageBody["h1"], strings.Trim(s.Find("h1").Text(), " \t\r\n"))

@@ -122,6 +122,8 @@ func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
 		log := &Logs{}
 		log.LogWrite(err2)
 	}
+
+	q.ClearQueue()
 }
 
 // Пропустить зависшую страницу в очереди
