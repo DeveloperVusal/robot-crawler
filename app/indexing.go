@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	neturl "net/url"
 	"regexp"
 	"strings"
 
@@ -63,6 +64,10 @@ func (indx *Indexing) Run(id uint64, url string) {
 					log.LogWrite(err)
 				}
 
+				// Парсинг полнного домена
+				uParseDom, _ := neturl.Parse(indx.Domain_full)
+
+				// Функции для фильтра
 				filterFunc := Filter{}
 
 				meta_robots, _ := doc.Find("meta[name=robots]").Attr("content")
@@ -76,12 +81,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 					}
 				}
 
-				// fmt.Println("Not nil - 1")
-
 				// Если индексация доступна
 				if isNoindex {
-					// fmt.Println("Not nil - 2")
-
 					// Мета теги и Title
 					pageHead["title"] = doc.Find("title").Text()
 
@@ -102,6 +103,11 @@ func (indx *Indexing) Run(id uint64, url string) {
 							s.Find("a").Each(func(ix int, sx *goquery.Selection) {
 								attrHref, _ := sx.Attr("href")
 								attrRel, _ := sx.Attr("rel")
+								uParseDom2, _ := neturl.Parse(attrHref)
+
+								if len(uParseDom2.Host) <= 0 {
+									attrHref = uParseDom.Scheme + `://` + uParseDom.Host + uParseDom2.Path
+								}
 
 								if filterFunc.IsValidLink(attrHref, indx.Domain_full) && attrRel != "nofollow" {
 									pageLinks = append(pageLinks, attrHref)
@@ -109,8 +115,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 							})
 						}
 					})
-
-					// fmt.Println("Not nil - 4")
 
 					if len(pageHead["title"]) > 2710 {
 						pageHead["title"] = filterFunc.Substr(pageHead["title"], 0, 2710)
@@ -129,8 +133,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 					// Содержание страницы
 					indx.GetContent(doc, &pageContent)
 
-					// fmt.Println("Not nil - 5")
-
 					pageContent = filterFunc.SliceStrUnique(pageContent)
 					pageBody["content"] = append(pageBody["content"], strings.Trim(strings.Join(pageContent[:], " "), " \t\r\n"))
 
@@ -142,8 +144,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 						"page_h1":          pageBody["h1"][0],
 						"page_text":        pageBody["content"][0],
 					})
-
-					// fmt.Println("Not nil - 6")
 
 					// Если данные о странице были обновлены
 					if isUpdatePage {
@@ -182,7 +182,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 	}
 
 	fmt.Println("")
-	// fmt.Println("")
 }
 
 // Метод получает содержимое/контент на странице
