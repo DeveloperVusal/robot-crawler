@@ -104,6 +104,12 @@ func (indx *Indexing) Run(id uint64, url string) {
 								uParseDom2, _ := neturl.Parse(attrHref)
 
 								if len(uParseDom2.Host) <= 0 {
+									if len(uParseDom2.Path) > 0 {
+										if uParseDom2.Path[0:1] != "/" {
+											uParseDom2.Path = "/" + uParseDom2.Path
+										}
+									}
+
 									attrHref = uParseDom.Scheme + `://` + uParseDom.Host + uParseDom2.Path
 								}
 
