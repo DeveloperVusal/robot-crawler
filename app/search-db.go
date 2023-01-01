@@ -13,7 +13,7 @@ type SearchDB struct {
 }
 
 // Метод проверяет имется ли страница в базе для поиска
-func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
+func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool, map[string]string) {
 	db := dbpkg.Database{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
@@ -25,13 +25,32 @@ func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
 	defer dbn.Close(ctx)
 
 	var row_id uint64
+	var meta_title, meta_description, meta_keywords, page_h1, page_text string
 
-	dbn.QueryRow(ctx, "SELECT id FROM web_pages WHERE page_url=$1", *url).Scan(&row_id)
+	dbn.QueryRow(ctx, `
+		SELECT 
+			id, 
+			meta_title, 
+			meta_description, 
+			meta_keywords,
+			page_h1,
+			page_text 
+		FROM web_pages 
+		WHERE page_url=$1
+	`, *url).Scan(
+		&row_id, &meta_title, &meta_description,
+		&meta_keywords, &page_h1, &page_text)
 
 	if row_id > 0 {
-		return row_id, true
+		return row_id, true, map[string]string{
+			"meta_title":       meta_title,
+			"meta_description": meta_description,
+			"meta_keywords":    meta_keywords,
+			"page_h1":          page_h1,
+			"page_text":        page_text,
+		}
 	} else {
-		return 0, false
+		return 0, false, map[string]string{}
 	}
 }
 

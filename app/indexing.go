@@ -3,7 +3,8 @@ package app
 import (
 	"context"
 	"database/sql"
-	"fmt"
+
+	// "fmt"
 	neturl "net/url"
 	"regexp"
 	"strings"
@@ -16,12 +17,13 @@ import (
 )
 
 type Indexing struct {
-	DBLink      *sql.DB
-	Ctx         context.Context
-	QueueId     uint64
-	Domain_id   uint64
-	Domain_full string
-	Resp        *PageReqData
+	DBLink          *sql.DB
+	Ctx             context.Context
+	QueueId         uint64
+	Domain_id       uint64
+	Domain_full     string
+	Resp            *PageReqData
+	PageCurrentData map[string]string
 }
 
 // Метод Запускает индексирование страницы
@@ -53,7 +55,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 				indx.Resp.Url = newUrl
 			}
 
-			fmt.Println("link", indx.Resp.Url)
+			// fmt.Println("link", indx.Resp.Url)
 
 			if isValid {
 				// Получаем Dom документ страницы
@@ -140,17 +142,28 @@ func (indx *Indexing) Run(id uint64, url string) {
 					pageContent = filterFunc.SliceStrUnique(pageContent)
 					pageBody["content"] = append(pageBody["content"], strings.Trim(strings.Join(pageContent[:], " "), " \t\r\n"))
 
-					isUpdatePage := indx.PageUpdate(&id, map[string]string{
-						"url":              url,
-						"meta_title":       pageHead["title"],
-						"meta_description": pageHead["description"],
-						"meta_keywords":    pageHead["keywords"],
-						"page_h1":          pageBody["h1"][0],
-						"page_text":        pageBody["content"][0],
-					})
+					// Помечаем страницу посещенной
+					isPageCrawl := indx.PageCrawl(&id)
 
-					// Если данные о странице были обновлены
-					if isUpdatePage {
+					// Если есть что изменить,
+					// то обновляем данные страницы
+					if pageHead["title"] != indx.PageCurrentData["title"] ||
+						pageHead["description"] != indx.PageCurrentData["meta_description"] ||
+						pageHead["keywords"] != indx.PageCurrentData["meta_keywords"] ||
+						pageBody["h1"][0] != indx.PageCurrentData["page_h1"] ||
+						pageBody["content"][0] != indx.PageCurrentData["page_text"] {
+						indx.PageUpdate(&id, map[string]string{
+							"url":              url,
+							"meta_title":       pageHead["title"],
+							"meta_description": pageHead["description"],
+							"meta_keywords":    pageHead["keywords"],
+							"page_h1":          pageBody["h1"][0],
+							"page_text":        pageBody["content"][0],
+						})
+					}
+
+					// Если страница была посещена
+					if isPageCrawl {
 						// Добавляем ссылки в очередь
 						for k := range pageLinks {
 							appqueue.AddUrlQueue(pageLinks[k], indx.Domain_id, indx.Domain_full)
@@ -185,7 +198,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 		appqueue.SetQueue(indx.QueueId, indx.Resp.StatusCode, 500)
 	}
 
-	fmt.Println("")
+	// fmt.Println("")
 }
 
 // Метод получает содержимое/контент на странице
@@ -233,6 +246,43 @@ func (indx *Indexing) ChildrenNodes(s *goquery.Selection, output *[]string) {
 	if s.Length() > 0 {
 		indx.ChildrenNodes(s.Children(), output)
 	}
+}
+
+// Метод помечает страницу посещенной
+func (indx *Indexing) PageCrawl(id *uint64) bool {
+	db := dbpkg.Database{}
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+
+		return false
+	}
+
+	defer dbn.Close(ctx)
+
+	var sql string = `
+		UPDATE 
+			web_pages 
+		SET
+			crawled_at = NOW()::timestamp
+		WHERE
+			id = $1
+	`
+
+	res, err := dbn.Exec(ctx, sql, *id)
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+
+		return false
+	}
+
+	_ = res.RowsAffected()
+
+	return true
 }
 
 // Метод обновляет данные индексируемой страницы

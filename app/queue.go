@@ -69,22 +69,25 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 
 			if disable {
 				indx := &Indexing{
-					DBLink:      q.DBLink,
-					Ctx:         q.Ctx,
-					QueueId:     *id,
-					Domain_id:   *domain_id,
-					Domain_full: *domain_full,
-					Resp:        &resp,
+					DBLink:          q.DBLink,
+					Ctx:             q.Ctx,
+					QueueId:         *id,
+					Domain_id:       *domain_id,
+					Domain_full:     *domain_full,
+					Resp:            &resp,
+					PageCurrentData: map[string]string{},
 				}
 
 				srchdb := &SearchDB{
 					DBLink: q.DBLink,
 					Ctx:    q.Ctx,
 				}
-				idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
+				idPage, isPage, dataPage := srchdb.IsWebPageBase(&resp.Url)
 
 				// Если такой url есть в базе
 				if isPage {
+					indx.PageCurrentData = dataPage
+
 					// Запускаем индексацию
 					go indx.Run(idPage, resp.Url)
 				} else { // Иначе
