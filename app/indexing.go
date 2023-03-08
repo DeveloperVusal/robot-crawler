@@ -203,6 +203,11 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 // Метод получает содержимое/контент на странице
 func (indx *Indexing) GetContent(doc *goquery.Document, output *[]string) {
+	filterRemove := []string{
+		"script",
+		"style",
+		"iframe",
+	}
 	filterSel := []string{
 		"body [class*=\"content\"]",
 		"body [id*=\"content\"]",
@@ -215,6 +220,14 @@ func (indx *Indexing) GetContent(doc *goquery.Document, output *[]string) {
 
 	striptags.AddSpaceWhenStrippingTag(true)
 
+	// Удаляем ненужный контент
+	for key := range filterRemove {
+		doc.Find(filterRemove[key]).Each(func(i int, s *goquery.Selection) {
+			s.Remove()
+		})
+	}
+
+	// Извлекаем необхоимый контент
 	for key := range filterSel {
 		doc.Find(filterSel[key]).Each(func(i int, s *goquery.Selection) {
 			html, _ := s.Html()

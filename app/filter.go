@@ -41,7 +41,8 @@ func (f *Filter) ClearBreak(s string) string {
 	result := strings.Replace(s, "\r", "", -1)
 	result = strings.Replace(result, "\n", "", -1)
 	result = strings.Replace(result, "\r\n", "", -1)
-	result = strings.Replace(result, "\t", "", -1)
+	result = strings.Replace(result, "\t", " ", -1)
+	result = strings.Replace(result, "  ", " ", -1)
 
 	return strings.Trim(result, " ")
 }
