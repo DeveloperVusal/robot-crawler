@@ -45,5 +45,11 @@ func ConfigDatabaseLoad() map[string]map[string]string {
 			"password": os.Getenv("DB_PASSWORD_2"),
 			"dbname":   os.Getenv("DB_DATABASE_2"),
 		},
+		"solr": {
+			"scheme": os.Getenv("SOLR_SCHEME"),
+			"host":   os.Getenv("SOLR_HOST"),
+			"port":   os.Getenv("SOLR_PORT"),
+			"core":   os.Getenv("SOLR_CORE"),
+		},
 	}
 }

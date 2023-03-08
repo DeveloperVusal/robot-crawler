@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	neturl "net/url"
 	"time"
+
+	dbpkg "robot/database"
 )
 
 type Queue struct {
@@ -55,39 +57,38 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 		log.LogWrite(errp)
 	}
 
+	// Если url корректный продолжаем
 	if isContinue {
 		req := &Request{
 			DBLink: q.DBLink,
 			Ctx:    q.Ctx,
 		}
 
-		// Если есть, что запустить в обработку
+		// Если есть доступный лимит для обработки
 		if *id > 0 && req.IsRequestLimit(url) {
 			q.SetQueue(*id, 0, 1) // Включаем обработку url
 
-			resp, disable := req.GetPageData(url) // Делаем запрос и получаем данные url
+			resp, isDisable := req.GetPageData(url) // Делаем запрос и получаем данные url
 
-			if disable {
+			if isDisable {
 				indx := &Indexing{
-					DBLink:          q.DBLink,
-					Ctx:             q.Ctx,
-					QueueId:         *id,
-					Domain_id:       *domain_id,
-					Domain_full:     *domain_full,
-					Resp:            &resp,
-					PageCurrentData: map[string]string{},
+					DBLink:      q.DBLink,
+					Ctx:         q.Ctx,
+					QueueId:     *id,
+					Domain_id:   *domain_id,
+					Domain_full: *domain_full,
+					Resp:        &resp,
 				}
 
+				// Получаем данные об url
 				srchdb := &SearchDB{
 					DBLink: q.DBLink,
 					Ctx:    q.Ctx,
 				}
-				idPage, isPage, dataPage := srchdb.IsWebPageBase(&resp.Url)
+				idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
 
 				// Если такой url есть в базе
 				if isPage {
-					indx.PageCurrentData = dataPage
-
 					// Запускаем индексацию в потоке
 					go indx.Run(idPage, resp.Url)
 				} else { // Иначе
@@ -219,6 +220,50 @@ func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 		if err != nil {
 			log := &Logs{}
 			log.LogWrite(err)
+		}
+	}
+}
+
+// Метод проверяет и добавляет сайты в очередь
+func (q *Queue) SitesQueue() {
+	dbn2 := q.DBLink
+	ctx2, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
+
+	defer cancelfunc()
+
+	db := dbpkg.Database{}
+	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+	}
+
+	defer dbn.Close(ctx)
+
+	// Получаем все сайты из базы
+	rows, err := dbn.Query(ctx, `SELECT id, domain_full FROM web_sites`)
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+	}
+
+	for rows.Next() {
+		var id uint64
+		var domain_full string
+
+		rows.Scan(&id, &domain_full)
+
+		// Проверяем есть ли данный сайт в рабочей очереди
+		var idQueue int
+		var sql string = `SELECT id FROM queue_pages WHERE domain_id=? AND domain_full=? AND url=? AND status=0 AND handler=0`
+
+		dbn2.QueryRowContext(ctx2, sql, id, domain_full, domain_full).Scan(&idQueue)
+
+		// Если нет, то добавляем сайт в очередь
+		if idQueue <= 0 {
+			q.AddUrlQueue(domain_full, id, domain_full)
 		}
 	}
 }

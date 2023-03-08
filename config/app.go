@@ -4,7 +4,7 @@ type AppConfig struct{}
 
 func (ap *AppConfig) Get(key string) string {
 	appConfig := map[string]string{
-		"projectPath": "",
+		"projectPath": "D:\\Development\\golang\\robot-butago",
 	}
 
 	return appConfig[key]

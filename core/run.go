@@ -18,4 +18,5 @@ func (rg *Robotgo) Run(ctx context.Context, mysql *sql.DB) {
 
 	appqueue.ContinueQueue()
 	appqueue.RunQueue()
+	go appqueue.SitesQueue()
 }

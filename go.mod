@@ -19,6 +19,8 @@ require (
 	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/kavu/go_reuseport v1.5.0 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.18 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/stevenferrer/solr-go v0.3.2 // indirect
 	github.com/tidwall/evio v1.0.8 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect

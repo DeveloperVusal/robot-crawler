@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"net/url"
 
-	config "robot/config"
+	"robot/config"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgconn"

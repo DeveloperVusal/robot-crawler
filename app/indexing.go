@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"strconv"
 
-	// "fmt"
 	neturl "net/url"
 	"regexp"
 	"strings"
@@ -14,16 +16,16 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/stevenferrer/solr-go"
 )
 
 type Indexing struct {
-	DBLink          *sql.DB
-	Ctx             context.Context
-	QueueId         uint64
-	Domain_id       uint64
-	Domain_full     string
-	Resp            *PageReqData
-	PageCurrentData map[string]string
+	DBLink      *sql.DB
+	Ctx         context.Context
+	QueueId     uint64
+	Domain_id   uint64
+	Domain_full string
+	Resp        *PageReqData
 }
 
 // Метод Запускает индексирование страницы
@@ -55,9 +57,9 @@ func (indx *Indexing) Run(id uint64, url string) {
 				indx.Resp.Url = newUrl
 			}
 
-			// fmt.Println("link", indx.Resp.Url)
-
 			if isValid {
+				// fmt.Println("link", indx.Resp.Url)
+
 				// Получаем Dom документ страницы
 				doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
 
@@ -105,18 +107,20 @@ func (indx *Indexing) Run(id uint64, url string) {
 								attrRel, _ := sx.Attr("rel")
 								uParseDom2, _ := neturl.Parse(attrHref)
 
-								if len(uParseDom2.Host) <= 0 {
-									if len(uParseDom2.Path) > 0 {
-										if uParseDom2.Path[0:1] != "/" {
-											uParseDom2.Path = "/" + uParseDom2.Path
+								if uParseDom2 != nil {
+									if len(uParseDom2.Host) <= 0 {
+										if len(uParseDom2.Path) > 0 {
+											if uParseDom2.Path[0:1] != "/" {
+												uParseDom2.Path = "/" + uParseDom2.Path
+											}
 										}
+
+										attrHref = uParseDom.Scheme + `://` + uParseDom.Host + uParseDom2.Path
 									}
 
-									attrHref = uParseDom.Scheme + `://` + uParseDom.Host + uParseDom2.Path
-								}
-
-								if filterFunc.IsValidLink(attrHref, indx.Domain_full) && attrRel != "nofollow" {
-									pageLinks = append(pageLinks, attrHref)
+									if filterFunc.IsValidLink(attrHref, indx.Domain_full) && attrRel != "nofollow" {
+										pageLinks = append(pageLinks, attrHref)
+									}
 								}
 							})
 						}
@@ -147,20 +151,14 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 					// Если есть что изменить,
 					// то обновляем данные страницы
-					if pageHead["title"] != indx.PageCurrentData["title"] ||
-						pageHead["description"] != indx.PageCurrentData["meta_description"] ||
-						pageHead["keywords"] != indx.PageCurrentData["meta_keywords"] ||
-						pageBody["h1"][0] != indx.PageCurrentData["page_h1"] ||
-						pageBody["content"][0] != indx.PageCurrentData["page_text"] {
-						indx.PageUpdate(&id, map[string]string{
-							"url":              url,
-							"meta_title":       pageHead["title"],
-							"meta_description": pageHead["description"],
-							"meta_keywords":    pageHead["keywords"],
-							"page_h1":          pageBody["h1"][0],
-							"page_text":        pageBody["content"][0],
-						})
-					}
+					indx.PageSaveIndex(&id, map[string]string{
+						"url":              url,
+						"meta_title":       pageHead["title"],
+						"meta_description": pageHead["description"],
+						"meta_keywords":    pageHead["keywords"],
+						"page_h1":          pageBody["h1"][0],
+						"page_text":        pageBody["content"][0],
+					})
 
 					// Если страница была посещена
 					if isPageCrawl {
@@ -299,7 +297,7 @@ func (indx *Indexing) PageCrawl(id *uint64) bool {
 }
 
 // Метод обновляет данные индексируемой страницы
-func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
+func (indx *Indexing) PageSaveIndex(id *uint64, details map[string]string) bool {
 	db := dbpkg.Database{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
@@ -315,18 +313,13 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 			web_pages 
 		SET
 			page_url = $2,
-			meta_title = $3,
-			meta_description = $4,
-			meta_keywords = $5,
-			page_h1 = $6,
-			page_text = $7,
 			index_status = true,
 			updated_at = NOW()::timestamp
 		WHERE
 			id = $1
 	`
 
-	res, err := dbn.Exec(ctx, sql, *id, details["url"], details["meta_title"], details["meta_description"], details["meta_keywords"], details["page_h1"], details["page_text"])
+	res, err := dbn.Exec(ctx, sql, *id, details["url"])
 
 	if err != nil {
 		log := &Logs{}
@@ -335,36 +328,89 @@ func (indx *Indexing) PageUpdate(id *uint64, details map[string]string) bool {
 
 	_ = res.RowsAffected()
 
-	var sql2 string = `
-		INSERT INTO vector_model_search
-		(page_id, hint_id, created_at)
-		(
-			SELECT
-				WP.id,
-				SH.id,
-				NOW()::timestamp
-			FROM
-				web_pages AS WP,
-				search_hints AS SH
-			WHERE
-				WP.id = $1 AND
-				(
-					WP.meta_title LIKE '' || SH.query || '%' OR
-					WP.page_h1 LIKE '' || SH.query || '%' OR
-					WP.page_text LIKE '' || SH.query || '%'
-				)
-		)
-		ON CONFLICT (page_id, hint_id) DO
-		UPDATE SET updated_at = NOW()::timestamp
-	`
-	res2, err2 := dbn.Exec(ctx, sql2, *id)
+	solrdb := dbpkg.Solr{}
+	clientSolr, coreSolr := solrdb.Init()
+
+	var docs []interface{}
+
+	docs = append(docs, map[string]interface{}{
+		"id":                    *id,
+		"page_url":              details["url"],
+		"page_meta_title":       details["meta_title"],
+		"page_meta_description": details["meta_description"],
+		"page_meta_keywords":    details["meta_keywords"],
+		"page_h1":               details["page_h1"],
+		"page_content":          details["page_text"],
+	})
+
+	buf := &bytes.Buffer{}
+	err2 := json.NewEncoder(buf).Encode(docs)
 
 	if err2 != nil {
 		log := &Logs{}
 		log.LogWrite(err2)
 	}
 
-	_ = res2.RowsAffected()
+	_, err2 = clientSolr.Update(ctx, coreSolr, solr.JSON, buf)
+
+	if err2 != nil {
+		log := &Logs{}
+		log.LogWrite(err2)
+	}
+
+	err2 = clientSolr.Commit(ctx, coreSolr)
+
+	if err2 != nil {
+		log := &Logs{}
+		log.LogWrite(err2)
+	}
+
+	buf.Reset()
+
+	return true
+}
+
+// Метод удаляет страницу из индекса Solr
+func (indx *Indexing) PageDeleteFromSolr(id *uint64) bool {
+	solrdb := dbpkg.Solr{}
+	clientSolr, coreSolr := solrdb.Init()
+	ctx := context.Background()
+
+	doc := map[string]interface{}{
+		"delete": map[string]string{
+			"query": "id:" + strconv.FormatUint(*id, 10),
+		},
+	}
+
+	buf := &bytes.Buffer{}
+	err := json.NewEncoder(buf).Encode(doc)
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+
+		return false
+	}
+
+	_, err = clientSolr.Update(ctx, coreSolr, solr.JSON, buf)
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+
+		return false
+	}
+
+	err = clientSolr.Commit(ctx, coreSolr)
+
+	if err != nil {
+		log := &Logs{}
+		log.LogWrite(err)
+
+		return false
+	}
+
+	buf.Reset()
 
 	return true
 }
@@ -399,6 +445,8 @@ func (indx *Indexing) PageDisableIndex(id *uint64) {
 	}
 
 	_ = res.RowsAffected()
+
+	indx.PageDeleteFromSolr(id)
 }
 
 // Метод удаляет страницу из индекса
@@ -433,4 +481,6 @@ func (indx *Indexing) PageDeleteIndex(id *uint64, status_code *int) {
 	}
 
 	_ = res.RowsAffected()
+
+	indx.PageDeleteFromSolr(id)
 }
