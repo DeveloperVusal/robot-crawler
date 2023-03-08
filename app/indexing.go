@@ -231,8 +231,8 @@ func (indx *Indexing) GetContent(doc *goquery.Document, output *[]string) {
 	for key := range filterSel {
 		doc.Find(filterSel[key]).Each(func(i int, s *goquery.Selection) {
 			html, _ := s.Html()
-			htmlText := filterFunc.ClearBreak(html)
-			htmlText = striptags.Sanitize(htmlText)
+			htmlText := striptags.Sanitize(html)
+			htmlText = filterFunc.ClearBreak(htmlText)
 
 			if len(htmlText) > 0 {
 				*output = append(*output, htmlText)
