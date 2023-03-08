@@ -88,7 +88,7 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 				if isPage {
 					indx.PageCurrentData = dataPage
 
-					// Запускаем индексацию
+					// Запускаем индексацию в потоке
 					go indx.Run(idPage, resp.Url)
 				} else { // Иначе
 					if len(resp.Url) > 4 {
@@ -97,7 +97,7 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 
 						// Если url добавлен
 						if lastInsertId > 0 {
-							// Запускаем индексацию
+							// Запускаем индексацию в потоке
 							go indx.Run(lastInsertId, origUrl)
 						} else {
 							q.SetQueue(*id, 500, 2) // Пропускаем url
