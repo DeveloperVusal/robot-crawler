@@ -88,7 +88,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 				// Если индексация доступна
 				if isNoindex {
 					// Мета теги и Title
-					pageHead["title"] = doc.Find("title").Text()
+					pageHead["title"] = filterFunc.ClearBreak(doc.Find("head title").Text())
 
 					meta_descr, _ := doc.Find("meta[name=description]").Attr("content")
 					pageHead["description"] = meta_descr
@@ -132,6 +132,10 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 					if len(pageBody["h1"][0]) > 2710 {
 						pageBody["h1"][0] = filterFunc.Substr(pageBody["h1"][0], 0, 2710)
+					}
+
+					if len(pageBody["h1"][0]) > 0 {
+						pageBody["h1"][0] = filterFunc.ClearBreak(pageBody["h1"][0])
 					}
 
 					// Если переход по ссылкам доступен
