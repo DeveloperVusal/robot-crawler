@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"strconv"
 
@@ -16,13 +15,14 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/redis/go-redis/v9"
 	"github.com/stevenferrer/solr-go"
 )
 
 type Indexing struct {
-	DBLink      *sql.DB
+	Redis       *redis.Client
 	Ctx         context.Context
-	QueueId     uint64
+	QueueKey    string
 	Domain_id   uint64
 	Domain_full string
 	Resp        *PageReqData
@@ -36,8 +36,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 	pageLinks := []string{}
 
 	appqueue := &Queue{
-		DBLink: indx.DBLink,
-		Ctx:    indx.Ctx,
+		Redis: indx.Redis,
+		Ctx:   indx.Ctx,
 	}
 
 	if indx.Resp.StatusCode == 200 {
@@ -45,7 +45,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 		if matched {
 			rbtxt := &Robotstxt{
-				DBLink:      indx.DBLink,
+				Redis:       indx.Redis,
 				Ctx:         indx.Ctx,
 				Domain_id:   indx.Domain_id,
 				IndexPgFind: []string{"*", "/", "?"},
@@ -58,7 +58,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 			}
 
 			if isValid {
-				// fmt.Println("link", indx.Resp.Url)
+				// fmt.Println("indexing url", indx.Resp.Url)
 
 				// Получаем Dom документ страницы
 				doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
@@ -172,15 +172,15 @@ func (indx *Indexing) Run(id uint64, url string) {
 						}
 
 						// Указываем заврешении индексации
-						appqueue.SetQueue(indx.QueueId, 1, 2)
+						appqueue.SetHash(indx.QueueKey, 500, 2, false)
 					} else {
 						// Указываем в очереди о недоступности индексирования
 						// страница не была обновлена в базе
-						appqueue.SetQueue(indx.QueueId, 600, 500)
+						appqueue.SetHash(indx.QueueKey, 600, 500, false)
 					}
 				} else {
 					// Указываем заврешении индексации
-					appqueue.SetQueue(indx.QueueId, 1, 2)
+					appqueue.SetHash(indx.QueueKey, 1, 2, false)
 				}
 			}
 		} else {
@@ -189,7 +189,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 			// Указываем в очереди о недоступности индексирования
 			// Страница не является TEXT или HTML
-			appqueue.SetQueue(indx.QueueId, 500, 500)
+			appqueue.SetHash(indx.QueueKey, 500, 500, false)
 		}
 	} else {
 		// Отключаем страницу из индексации
@@ -197,7 +197,7 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 		// Указываем в очереди о недоступности индексирования
 		// Страница не доступна
-		appqueue.SetQueue(indx.QueueId, indx.Resp.StatusCode, 500)
+		appqueue.SetHash(indx.QueueKey, indx.Resp.StatusCode, 500, false)
 	}
 
 	// fmt.Println("")

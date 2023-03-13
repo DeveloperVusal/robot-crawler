@@ -2,14 +2,15 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"regexp"
 	dbpkg "robot/database"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type SearchDB struct {
-	DBLink *sql.DB
-	Ctx    context.Context
+	Redis *redis.Client
+	Ctx   context.Context
 }
 
 // Метод проверяет имется ли страница в базе для поиска
@@ -48,7 +49,7 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint
 
 		if matched {
 			rbtxt := &Robotstxt{
-				DBLink:      srdb.DBLink,
+				Redis:       srdb.Redis,
 				Ctx:         srdb.Ctx,
 				Domain_id:   *domain_id,
 				IndexPgFind: []string{"*", "/", "?"},

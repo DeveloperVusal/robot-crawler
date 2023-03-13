@@ -2,55 +2,52 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	neturl "net/url"
+	"strconv"
 	"time"
 
 	dbpkg "robot/database"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Queue struct {
-	DBLink *sql.DB
-	Ctx    context.Context
+	Redis *redis.Client
+	Ctx   context.Context
 }
 
 // Метод проверяет и запускает индексацию страниц в очереди
 func (q *Queue) RunQueue() {
-	dbn := q.DBLink
-	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
+	// Получаем наличие очереди
+	count, _ := q.Redis.LLen(q.Ctx, "queue").Result()
 
-	defer cancelfunc()
+	// Если очередь не пуста
+	if count > 0 {
+		// Забираем url из конца списка/очереди
+		_url, err := q.Redis.RPop(q.Ctx, "queue").Result()
 
-	// Проверяет пуста ли очередь
-	rows, err := dbn.QueryContext(ctx, "CALL queue_handle();")
+		if err != nil {
+			log := &Logs{}
+			log.LogWrite(err)
+		} else {
+			domain_id, _ := q.Redis.HGet(q.Ctx, _url, "domain_id").Result()
+			domain_full, _ := q.Redis.HGet(q.Ctx, _url, "domain_full").Result()
 
-	if err != nil {
-		log := &Logs{}
-		log.LogWrite(err)
-	}
+			d_id, _ := strconv.ParseUint(domain_id, 10, 64)
 
-	var id uint64
-	var domain_id uint64
-	var url string
-	var domain_full string
-
-	for rows.Next() {
-		rows.Scan(&id, &url, &domain_id, &domain_full)
-
-		if id > 0 {
-			q.HandleQueue(&id, &url, &domain_id, &domain_full)
+			q.HandleQueue(_url, d_id, domain_full)
 		}
 	}
 }
 
 // Обработка страницы из очереди
-func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_full *string) {
+func (q *Queue) HandleQueue(url string, domain_id uint64, domain_full string) {
 	isContinue := true
-	_, errp := neturl.Parse(*url)
+	_, errp := neturl.Parse(url)
 
-	// Если в очередь попала не корректный url
+	// Если в очередь попал не корректный url
 	if errp != nil {
-		q.SetQueue(*id, 503, 0)
+		q.SetHash(url, 503, 0, false)
 		isContinue = false
 
 		log := &Logs{}
@@ -60,30 +57,30 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 	// Если url корректный продолжаем
 	if isContinue {
 		req := &Request{
-			DBLink: q.DBLink,
-			Ctx:    q.Ctx,
+			Redis: q.Redis,
+			Ctx:   q.Ctx,
 		}
 
 		// Если есть доступный лимит для обработки
-		if *id > 0 && req.IsRequestLimit(url) {
-			q.SetQueue(*id, 0, 1) // Включаем обработку url
+		if req.IsRequestLimit(&domain_full) {
+			q.SetHash(url, 0, 1, true)
 
-			resp, isDisable := req.GetPageData(url) // Делаем запрос и получаем данные url
+			resp, isDisable := req.GetPageData(&url) // Делаем запрос и получаем данные url
 
 			if isDisable {
 				indx := &Indexing{
-					DBLink:      q.DBLink,
+					Redis:       q.Redis,
 					Ctx:         q.Ctx,
-					QueueId:     *id,
-					Domain_id:   *domain_id,
-					Domain_full: *domain_full,
+					QueueKey:    url,
+					Domain_id:   domain_id,
+					Domain_full: domain_full,
 					Resp:        &resp,
 				}
 
 				// Получаем данные об url
 				srchdb := &SearchDB{
-					DBLink: q.DBLink,
-					Ctx:    q.Ctx,
+					Redis: q.Redis,
+					Ctx:   q.Ctx,
 				}
 				idPage, isPage := srchdb.IsWebPageBase(&resp.Url)
 
@@ -94,17 +91,17 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 				} else { // Иначе
 					if len(resp.Url) > 4 {
 						// Добавляем url в базу
-						lastInsertId, origUrl := srchdb.AddWebPageBase(domain_id, &resp)
+						lastInsertId, origUrl := srchdb.AddWebPageBase(&domain_id, &resp)
 
 						// Если url добавлен
 						if lastInsertId > 0 {
 							// Запускаем индексацию в потоке
 							go indx.Run(lastInsertId, origUrl)
 						} else {
-							q.SetQueue(*id, 500, 2) // Пропускаем url
+							q.SetHash(url, 500, 2, false) // Пропускаем url
 						}
 					} else {
-						q.SetQueue(*id, 501, 2) // Пропускаем url
+						q.SetHash(url, 501, 2, false) // Пропускаем url
 					}
 				}
 			}
@@ -112,125 +109,57 @@ func (q *Queue) HandleQueue(id *uint64, url *string, domain_id *uint64, domain_f
 	}
 }
 
-// Метод устанвливает статус страницы в очереди
-func (q *Queue) SetQueue(id uint64, _status int, _handler int) {
-	dbn := q.DBLink
-	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
+// Метод устанвливает статус обработки страницы
+func (q *Queue) SetHash(url string, _status int, _handler int, isRun bool) {
+	q.Redis.HSet(q.Ctx, url, "status", _status)
+	q.Redis.HSet(q.Ctx, url, "handler", _handler)
 
-	defer cancelfunc()
-
-	// Обновляем статус в очереди
-	_, err2 := dbn.ExecContext(ctx, "UPDATE `queue_pages` SET status = ?, handler = ?, thread_time = NOW() WHERE id = ?", _status, _handler, id)
-
-	if err2 != nil {
-		log := &Logs{}
-		log.LogWrite(err2)
+	if isRun {
+		q.Redis.HSet(q.Ctx, url, "launched_at", time.Now().Unix())
 	}
-
-	q.ClearQueue()
 }
 
 // Пропустить зависшую страницу в очереди
 func (q *Queue) ContinueQueue() {
-	dbn := q.DBLink
-	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
-	defer cancelfunc()
-
-	// Проверяем имеются ли в очереди страницы зависщие на более 5 минут
-	var id uint64
-	var sql string = `
-		SELECT
-			id
-		FROM queue_pages
-		WHERE
-			status = 0 AND
-			handler = 1 AND
-			(UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time)) >= 300`
-
-	rows, err2 := dbn.QueryContext(ctx, sql)
-
-	if err2 != nil {
-		log := &Logs{}
-		log.LogWrite(err2)
-	}
-
-	for rows.Next() {
-		rows.Scan(&id)
-
-		if id > 0 {
-			q.SetQueue(id, 700, 0)
-		}
-	}
 }
 
 // Очищаем старые обработанные url из очереди
 func (q *Queue) ClearQueue() {
-	dbn := q.DBLink
-	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
 
-	defer cancelfunc()
-
-	// Очищаем обработанные страницы в очереди более 3-х дней
-	_, err2 := dbn.ExecContext(ctx, `
-		DELETE
-		FROM queue_pages
-		WHERE
-			status != 0 AND
-			handler != 0 AND
-			(UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(thread_time)) >= 259200
-	`)
-
-	if err2 != nil {
-		log := &Logs{}
-		log.LogWrite(err2)
-	}
 }
 
-// Метод добавляет страницу в очередь на обработку
+// Метод создает хэш ключ
+func (q *Queue) CreateHash(url string, domain_id uint64, domain_full string) {
+	q.Redis.HSetNX(q.Ctx, url, "domain_id", domain_id)
+	q.Redis.HSetNX(q.Ctx, url, "domain_full", domain_full)
+	q.Redis.HSetNX(q.Ctx, url, "status", 0)
+	q.Redis.HSetNX(q.Ctx, url, "handler", 0)
+	q.Redis.HSetNX(q.Ctx, url, "launched_at", "")
+	q.Redis.HSetNX(q.Ctx, url, "created_at", time.Now().Unix())
+}
+
+// Метод добавляет страницу в хэш и в очередь на обработку
 func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
-	dbn := q.DBLink
-	ctx, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
+	// Создаем хэш, если его нет
+	q.CreateHash(url, domain_id, domain_full)
 
-	defer cancelfunc()
+	// Проверяем есть ли урл в очереди
+	indxPos, _ := q.Redis.LPos(q.Ctx, "queue", url, redis.LPosArgs{Rank: 1}).Result()
 
-	// Проверяем не добавлена ли страница в очередь
-	var selID int
-	rows, err := dbn.QueryContext(ctx, "SELECT `id` FROM `queue_pages` WHERE `url` = ?", url)
+	// Если нет, то добавляем урл в очередь
+	if indxPos <= 0 {
+		q.Redis.LPush(q.Ctx, "queue", url).Result()
 
-	if err != nil {
-		log := &Logs{}
-		log.LogWrite(err)
+		// if st > 0 {
+		// 	// fmt.Println("add queue =>", url)
+		// }
 	}
 
-	for rows.Next() {
-		err := rows.Scan(&selID)
-
-		if err != nil {
-			log := &Logs{}
-			log.LogWrite(err)
-		}
-	}
-
-	// Если такого url нет в очереди
-	if selID <= 0 {
-		// Добавляем url в очередь
-		_, err := dbn.ExecContext(ctx, "INSERT INTO queue_pages (domain_id, domain_full, url) VALUES (?, ?, ?)", domain_id, domain_full, url)
-
-		if err != nil {
-			log := &Logs{}
-			log.LogWrite(err)
-		}
-	}
 }
 
 // Метод проверяет и добавляет сайты в очередь
 func (q *Queue) SitesQueue() {
-	dbn2 := q.DBLink
-	ctx2, cancelfunc := context.WithTimeout(q.Ctx, 180*time.Second)
-
-	defer cancelfunc()
-
 	db := dbpkg.Database{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
@@ -241,7 +170,7 @@ func (q *Queue) SitesQueue() {
 
 	defer dbn.Close(ctx)
 
-	// Получаем все сайты из базы
+	// Получаем все сайты из базы Postgres
 	rows, err := dbn.Query(ctx, `SELECT id, domain_full FROM web_sites`)
 
 	if err != nil {
@@ -255,15 +184,7 @@ func (q *Queue) SitesQueue() {
 
 		rows.Scan(&id, &domain_full)
 
-		// Проверяем есть ли данный сайт в рабочей очереди
-		var idQueue int
-		var sql string = `SELECT id FROM queue_pages WHERE domain_id=? AND domain_full=? AND url=? AND status=0 AND handler=0`
-
-		dbn2.QueryRowContext(ctx2, sql, id, domain_full, domain_full).Scan(&idQueue)
-
-		// Если нет, то добавляем сайт в очередь
-		if idQueue <= 0 {
-			q.AddUrlQueue(domain_full, id, domain_full)
-		}
+		// Пробуем добавить сайт в очередь
+		q.AddUrlQueue(domain_full, id, domain_full)
 	}
 }

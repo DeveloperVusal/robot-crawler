@@ -4,19 +4,21 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 type Request struct {
-	DBLink *sql.DB
-	Ctx    context.Context
+	Redis *redis.Client
+	Ctx   context.Context
 }
 
 type PageReqData struct {
@@ -36,29 +38,64 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 		log.LogWrite(err)
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
+	nextUrl := *url
 
-	client := &http.Client{Transport: tr}
+	var resp *http.Response
+	var i int
 
-	req, err := http.NewRequest("GET", *url, nil)
+	for i < 100 {
+		req, err := http.NewRequest("GET", nextUrl, nil)
+		req.Header.Set("User-Agent", os.Getenv("BOT_USERAGENT"))
+		// req.Header.Set("Accept-Encoding", "deflate, gzip;q=1.0, *;q=0.5")
 
-	if err != nil {
-		log := &Logs{}
-		log.LogWrite(err)
-	}
+		if err != nil {
+			log := &Logs{}
+			log.LogWrite(err)
+		}
 
-	req.Header.Set("User-Agent", os.Getenv("BOT_USERAGENT"))
-	// req.Header.Set("Accept-Encoding", "deflate, gzip;q=1.0, *;q=0.5")
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
 
-	resp, err := client.Do(req)
+		resp, err = client.Do(req)
 
-	if err != nil {
-		log := &Logs{}
-		log.LogWrite(err)
+		if err != nil {
+			log := &Logs{}
+			log.LogWrite(err)
+		}
 
-		return PageReqData{}, false
+		if resp.StatusCode == 200 {
+			// fmt.Println("Done!")
+			break
+		} else {
+			location := resp.Header.Get("Location")
+
+			if len(location) > 0 {
+				parseLocation, _ := neturl.Parse(location)
+
+				if len(parseLocation.Hostname()) <= 0 {
+					ifFirst := nextUrl[(len(nextUrl) - 1):]
+					ifSecond := location[0:1]
+
+					if ifFirst == "/" && ifSecond == "/" {
+						nextUrl = nextUrl[0:len(nextUrl)-1] + location
+					} else if ifFirst != "/" && ifSecond != "/" {
+						nextUrl = nextUrl + "/" + location
+					} else {
+						nextUrl = nextUrl + location
+					}
+				} else {
+					nextUrl = resp.Header.Get("Location")
+				}
+			}
+
+			i += 1
+		}
 	}
 
 	return PageReqData{
@@ -71,53 +108,40 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 }
 
 // Метод фиксирует лимиты запросов в n секунд
-func (rq *Request) IsRequestLimit(url *string) bool {
+func (rq *Request) IsRequestLimit(domain_full *string) bool {
+	domain, _ := neturl.Parse(*domain_full)
 	startTime := time.Now().Unix()
 
-	dbn := rq.DBLink
-	ctx, cancelfunc := context.WithTimeout(rq.Ctx, 180*time.Second)
+	var limSeconds int64 = 1
+	var limQty int = 5
 
-	defer cancelfunc()
+	requests, _ := rq.Redis.SMembers(rq.Ctx, domain.Host).Result()
 
-	var limSeconds int = 1
-	var limQty int = 3
+	if len(requests) <= 0 {
+		rq.Redis.SAdd(rq.Ctx, domain.Host, time.Now().Unix())
 
-	var limResCount int
+		return true
+	} else {
+		for {
+			requests, _ = rq.Redis.SMembers(rq.Ctx, domain.Host).Result()
 
-	sql := `SELECT 
-				COUNT(id) AS COUNT
-			FROM requests_limit
-			WHERE
-				(UNIX_TIMESTAMP(CURTIME(3)) - UNIX_TIMESTAMP(created_at)) < ?`
+			if len(requests) < limQty {
+				rq.Redis.SAdd(rq.Ctx, domain.Host, time.Now().Unix())
 
-	for {
-		err := dbn.QueryRowContext(ctx, sql, limSeconds).Scan(&limResCount)
+				for _, tm := range requests {
+					_tm, _ := strconv.ParseInt(tm, 10, 64)
 
-		if err != nil {
-			log := &Logs{}
-			log.LogWrite(err)
-		}
+					if (time.Now().Unix() - _tm) > limSeconds {
+						rq.Redis.SPop(rq.Ctx, domain.Host)
+					}
+				}
 
-		if limResCount < limQty {
-			_, err := dbn.Exec("INSERT INTO requests_limit (url) VALUES (?)", url)
-
-			if err != nil {
-				log := &Logs{}
-				log.LogWrite(err)
+				return true
 			}
 
-			_, err2 := dbn.Exec("DELETE FROM `requests_limit` WHERE (UNIX_TIMESTAMP(CURTIME(3)) - UNIX_TIMESTAMP(created_at)) > ?", limSeconds)
-
-			if err2 != nil {
-				log := &Logs{}
-				log.LogWrite(err2)
+			if time.Now().Unix()-startTime >= 300 {
+				return false
 			}
-
-			return true
-		}
-
-		if time.Now().Unix()-startTime >= 300 {
-			return false
 		}
 	}
 }

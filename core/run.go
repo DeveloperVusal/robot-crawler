@@ -2,21 +2,22 @@ package core
 
 import (
 	"context"
-	"database/sql"
 	"robot/app"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Robotgo struct{}
 
 // Метод запускает работу робота
 // Вызывает метод app.Queue.RunQueue()
-func (rg *Robotgo) Run(ctx context.Context, mysql *sql.DB) {
+func (rg *Robotgo) Run(ctx context.Context, redis *redis.Client) {
 	appqueue := &app.Queue{
-		DBLink: mysql,
-		Ctx:    ctx,
+		Redis: redis,
+		Ctx:   ctx,
 	}
 
-	appqueue.ContinueQueue()
+	// appqueue.ContinueQueue()
 	appqueue.RunQueue()
 	go appqueue.SitesQueue()
 }

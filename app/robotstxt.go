@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -13,10 +12,11 @@ import (
 	dbpkg "robot/database"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 type Robotstxt struct {
-	DBLink      *sql.DB
+	Redis       *redis.Client
 	Ctx         context.Context
 	Domain_id   uint64
 	IndexPgFind []string
@@ -101,8 +101,8 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 
 	if rbData == "" {
 		req := Request{
-			DBLink: r.DBLink,
-			Ctx:    r.Ctx,
+			Redis: r.Redis,
+			Ctx:   r.Ctx,
 		}
 		rbtxtxData := req.GetReadFile(filename)
 
