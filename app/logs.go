@@ -9,10 +9,15 @@ import (
 type Logs struct{}
 
 func (l *Logs) LogWrite(_err error) {
-	dir, _ := os.Getwd()
-	projectPath := filepath.Join(filepath.Dir(dir), filepath.Base(dir))
+	ex, err := os.Executable()
 
-	filename := filepath.Join(projectPath, "/logs/app.log")
+	if err != nil {
+		panic(err)
+	}
+
+	exPath := filepath.Dir(ex)
+	filename := filepath.Join(exPath, "/logs/app.log")
+
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 
 	if err != nil {
