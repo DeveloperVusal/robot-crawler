@@ -17,7 +17,7 @@ func (rg *Robotgo) Run(ctx context.Context, redis *redis.Client) {
 		Ctx:   ctx,
 	}
 
-	// appqueue.ContinueQueue()
+	appqueue.ContinueWorkers()
 	appqueue.RunQueue()
 	go appqueue.SitesQueue()
 }

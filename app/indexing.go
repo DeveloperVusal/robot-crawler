@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strconv"
-
+	"errors"
+	"fmt"
 	neturl "net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
-	dbpkg "robot/database"
+	"robot/database"
 
 	"github.com/PuerkitoBio/goquery"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/redis/go-redis/v9"
 	"github.com/stevenferrer/solr-go"
@@ -34,6 +34,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 	pageBody := map[string][]string{}
 	pageContent := []string{}
 	pageLinks := []string{}
+
+	log := &Logs{}
 
 	appqueue := &Queue{
 		Redis: indx.Redis,
@@ -58,7 +60,8 @@ func (indx *Indexing) Run(id uint64, url string) {
 			}
 
 			if isValid {
-				// fmt.Println("indexing url", indx.Resp.Url)
+				fmt.Println("indexing url", indx.Resp.Url)
+				fmt.Println("")
 
 				// Получаем Dom документ страницы
 				doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
@@ -172,15 +175,22 @@ func (indx *Indexing) Run(id uint64, url string) {
 						}
 
 						// Указываем заврешении индексации
-						appqueue.SetHash(indx.QueueKey, 500, 2, false)
+						appqueue.SetHash(indx.QueueKey, 2, 2, false)
+						appqueue.RemoveWorker(indx.QueueKey)
 					} else {
 						// Указываем в очереди о недоступности индексирования
 						// страница не была обновлена в базе
-						appqueue.SetHash(indx.QueueKey, 600, 500, false)
+						appqueue.SetHash(indx.QueueKey, 600, 1, false)
+						appqueue.RemoveWorker(indx.QueueKey)
+
+						log.LogWrite(errors.New(`err step: 600, 1 -- ` + indx.QueueKey))
 					}
 				} else {
 					// Указываем заврешении индексации
 					appqueue.SetHash(indx.QueueKey, 1, 2, false)
+					appqueue.RemoveWorker(indx.QueueKey)
+
+					log.LogWrite(errors.New(`warning step: 1, 2 -- ` + indx.QueueKey))
 				}
 			}
 		} else {
@@ -189,7 +199,10 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 			// Указываем в очереди о недоступности индексирования
 			// Страница не является TEXT или HTML
-			appqueue.SetHash(indx.QueueKey, 500, 500, false)
+			appqueue.SetHash(indx.QueueKey, 500, 1, false)
+			appqueue.RemoveWorker(indx.QueueKey)
+
+			log.LogWrite(errors.New(`err step: 500, 1 -- ` + indx.QueueKey))
 		}
 	} else {
 		// Отключаем страницу из индексации
@@ -197,7 +210,10 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 		// Указываем в очереди о недоступности индексирования
 		// Страница не доступна
-		appqueue.SetHash(indx.QueueKey, indx.Resp.StatusCode, 500, false)
+		appqueue.SetHash(indx.QueueKey, indx.Resp.StatusCode, 1, false)
+		appqueue.RemoveWorker(indx.QueueKey)
+
+		log.LogWrite(errors.New(`err step: ` + strconv.Itoa(indx.Resp.StatusCode) + `, 1 -- ` + indx.QueueKey))
 	}
 
 	// fmt.Println("")
@@ -265,7 +281,7 @@ func (indx *Indexing) ChildrenNodes(s *goquery.Selection, output *[]string) {
 
 // Метод помечает страницу посещенной
 func (indx *Indexing) PageCrawl(id *uint64) bool {
-	db := dbpkg.Database{}
+	db := database.PgSQL{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
@@ -302,7 +318,7 @@ func (indx *Indexing) PageCrawl(id *uint64) bool {
 
 // Метод обновляет данные индексируемой страницы
 func (indx *Indexing) PageSaveIndex(id *uint64, details map[string]string) bool {
-	db := dbpkg.Database{}
+	db := database.PgSQL{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
@@ -332,7 +348,7 @@ func (indx *Indexing) PageSaveIndex(id *uint64, details map[string]string) bool 
 
 	_ = res.RowsAffected()
 
-	solrdb := dbpkg.Solr{}
+	solrdb := database.Solr{}
 	clientSolr, coreSolr := solrdb.Init()
 
 	var docs []interface{}
@@ -376,7 +392,7 @@ func (indx *Indexing) PageSaveIndex(id *uint64, details map[string]string) bool 
 
 // Метод удаляет страницу из индекса Solr
 func (indx *Indexing) PageDeleteFromSolr(id *uint64) bool {
-	solrdb := dbpkg.Solr{}
+	solrdb := database.Solr{}
 	clientSolr, coreSolr := solrdb.Init()
 	ctx := context.Background()
 
@@ -421,7 +437,7 @@ func (indx *Indexing) PageDeleteFromSolr(id *uint64) bool {
 
 // Метод отключает страницу из индекса
 func (indx *Indexing) PageDisableIndex(id *uint64) {
-	db := dbpkg.Database{}
+	db := database.PgSQL{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
@@ -455,7 +471,7 @@ func (indx *Indexing) PageDisableIndex(id *uint64) {
 
 // Метод удаляет страницу из индекса
 func (indx *Indexing) PageDeleteIndex(id *uint64, status_code *int) {
-	db := dbpkg.Database{}
+	db := database.PgSQL{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {

@@ -1,15 +1,16 @@
 package database
 
 import (
-	"github.com/redis/go-redis/v9"
-
 	"robot/config"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Redis struct{}
 
 func (s *Redis) Init() *redis.Client {
-	cfg := config.ConfigDatabaseLoad()
+	loadCfg := &config.Database{}
+	cfg := loadCfg.Load()
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     cfg["redis"]["host"] + ":" + cfg["redis"]["port"],

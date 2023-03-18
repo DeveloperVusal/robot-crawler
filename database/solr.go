@@ -13,7 +13,8 @@ import (
 type Solr struct{}
 
 func (s *Solr) Init() (*solr.JSONClient, string) {
-	cfg := config.ConfigDatabaseLoad()
+	loadCfg := &config.Database{}
+	cfg := loadCfg.Load()
 
 	requestSender := solr.NewDefaultRequestSender().
 		WithHTTPClient(&http.Client{Timeout: 10800 * time.Second}).

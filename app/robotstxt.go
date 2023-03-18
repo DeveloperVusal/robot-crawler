@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 
-	dbpkg "robot/database"
+	"robot/database"
+	"robot/helpers"
 
-	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -25,11 +24,14 @@ type Robotstxt struct {
 
 // Метод проверяет ссылку на правила в robots.txt
 func (r *Robotstxt) UrlHandle(link *string) (bool, string) {
+	env := helpers.Env{}
+	env.LoadEnv()
+
 	uParseDom, _ := url.Parse(*link)
 	filename := uParseDom.Scheme + "://" + uParseDom.Host + "/robots.txt"
 
 	robotsData := r.get(&filename)
-	userAgent := os.Getenv("BOT_USERAGENT")
+	userAgent := env.Env("BOT_USERAGENT")
 	var isValid bool
 	var handleUrl string
 
@@ -56,7 +58,7 @@ func (r *Robotstxt) UrlHandle(link *string) (bool, string) {
 
 // Получаем содержимое robots.txt валидное для ButaGoBot
 func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
-	db := dbpkg.Database{}
+	db := database.PgSQL{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
@@ -138,14 +140,10 @@ func (r *Robotstxt) get(filename *string) map[string][]map[string][]string {
 
 // Парсим содержимое robots.txt
 func (r *Robotstxt) parse(data *[]string) map[string][]map[string][]string {
-	var err = godotenv.Load()
+	env := helpers.Env{}
+	env.LoadEnv()
 
-	if err != nil {
-		log := &Logs{}
-		log.LogWrite(err)
-	}
-
-	userAgent := os.Getenv("BOT_USERAGENT")
+	userAgent := env.Env("BOT_USERAGENT")
 	rules := map[string][]map[string][]string{
 		userAgent: {},
 	}
@@ -178,7 +176,10 @@ func (r *Robotstxt) parse(data *[]string) map[string][]map[string][]string {
 
 // Обработка правил robots.txt
 func (r *Robotstxt) handleRules(dir *string, val *string, rules *map[string][]map[string][]string, isAllowBot *bool) {
-	userAgent := os.Getenv("BOT_USERAGENT")
+	env := helpers.Env{}
+	env.LoadEnv()
+
+	userAgent := env.Env("BOT_USERAGENT")
 	filterFunc := &Filter{}
 
 	if *dir == "user-agent" {

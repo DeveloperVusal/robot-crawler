@@ -8,11 +8,11 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
-	"os"
 	"strconv"
 	"time"
 
-	"github.com/joho/godotenv"
+	"robot/helpers"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,12 +31,8 @@ type PageReqData struct {
 
 // Метод получает данные запрашиваемого url адреса
 func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
-	var err = godotenv.Load()
-
-	if err != nil {
-		log := &Logs{}
-		log.LogWrite(err)
-	}
+	env := helpers.Env{}
+	env.LoadEnv()
 
 	nextUrl := *url
 
@@ -45,7 +41,7 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 
 	for i < 100 {
 		req, err := http.NewRequest("GET", nextUrl, nil)
-		req.Header.Set("User-Agent", os.Getenv("BOT_USERAGENT"))
+		req.Header.Set("User-Agent", env.Env("BOT_USERAGENT"))
 		// req.Header.Set("Accept-Encoding", "deflate, gzip;q=1.0, *;q=0.5")
 
 		if err != nil {
@@ -55,11 +51,13 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 
 		client := &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+				ExpectContinueTimeout: 60,
 			},
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
+			Timeout: time.Second * 120,
 		}
 
 		resp, err = client.Do(req)
@@ -67,6 +65,8 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 		if err != nil {
 			log := &Logs{}
 			log.LogWrite(err)
+
+			return PageReqData{}, false
 		}
 
 		if resp.StatusCode == 200 {

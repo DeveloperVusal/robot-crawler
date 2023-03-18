@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"regexp"
-	dbpkg "robot/database"
+	"robot/database"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -15,7 +15,7 @@ type SearchDB struct {
 
 // Метод проверяет имется ли страница в базе для поиска
 func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
-	db := dbpkg.Database{}
+	db := database.PgSQL{}
 	ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 	if err != nil {
@@ -27,13 +27,7 @@ func (srdb *SearchDB) IsWebPageBase(url *string) (uint64, bool) {
 
 	var row_id uint64
 
-	dbn.QueryRow(ctx, `
-		SELECT 
-			id 
-		FROM web_pages 
-		WHERE page_url=$1
-	`, *url).Scan(
-		&row_id)
+	dbn.QueryRow(ctx, `SELECT id FROM web_pages WHERE page_url=$1`, *url).Scan(&row_id)
 
 	if row_id > 0 {
 		return row_id, true
@@ -62,7 +56,7 @@ func (srdb *SearchDB) AddWebPageBase(domain_id *uint64, resp *PageReqData) (uint
 			}
 
 			if isValid {
-				db := dbpkg.Database{}
+				db := database.PgSQL{}
 				ctx, dbn, err := db.ConnPgSQL("rw_pgsql_search")
 
 				if err != nil {

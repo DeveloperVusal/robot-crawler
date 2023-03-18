@@ -6,7 +6,7 @@ import (
 
 	"robot/app"
 	"robot/core"
-	dbpkg "robot/database"
+	"robot/database"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/evio"
@@ -17,7 +17,7 @@ var rdb *redis.Client
 func init() {
 	var err error
 
-	redis := dbpkg.Redis{}
+	redis := database.Redis{}
 
 	// Подключаемся к БД
 	rdb = redis.Init()

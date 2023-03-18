@@ -4,15 +4,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-
-	cfg "robot/config"
 )
 
 type Logs struct{}
 
-func (l *Logs) LogWrite(err2 error) {
-	appConfig := &cfg.AppConfig{}
-	projectPath := appConfig.Get("projectPath")
+func (l *Logs) LogWrite(_err error) {
+	dir, _ := os.Getwd()
+	projectPath := filepath.Join(filepath.Dir(dir), filepath.Base(dir))
 
 	filename := filepath.Join(projectPath, "/logs/app.log")
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -24,5 +22,5 @@ func (l *Logs) LogWrite(err2 error) {
 	defer f.Close()
 
 	log.SetOutput(f)
-	log.Println(err2)
+	log.Println(_err)
 }
