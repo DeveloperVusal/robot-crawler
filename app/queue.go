@@ -13,8 +13,9 @@ import (
 )
 
 type Queue struct {
-	Redis *redis.Client
-	Ctx   context.Context
+	Redis      *redis.Client
+	Ctx        context.Context
+	MaxThreads uint64
 }
 
 // Метод проверяет и запускает индексацию страниц в очереди
@@ -143,7 +144,7 @@ func (q *Queue) AddWorker(_url string) bool {
 	// Проверяем доступность места на обработку
 	wcount, _ := q.Redis.LLen(q.Ctx, "worker").Result()
 
-	if wcount < 10 {
+	if uint64(wcount) < q.MaxThreads {
 		// Проверяем есть ли урл в обработке
 		indxPos, _ := q.Redis.LPos(q.Ctx, "worker", _url, redis.LPosArgs{Rank: 1}).Result()
 

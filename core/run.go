@@ -11,10 +11,11 @@ type Robotgo struct{}
 
 // Метод запускает работу робота
 // Вызывает метод app.Queue.RunQueue()
-func (rg *Robotgo) Run(ctx context.Context, redis *redis.Client) {
+func (rg *Robotgo) Run(ctx context.Context, redis *redis.Client, max_threads uint64) {
 	appqueue := &app.Queue{
-		Redis: redis,
-		Ctx:   ctx,
+		Redis:      redis,
+		Ctx:        ctx,
+		MaxThreads: max_threads,
 	}
 
 	appqueue.ContinueWorkers()
