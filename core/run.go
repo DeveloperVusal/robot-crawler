@@ -21,4 +21,5 @@ func (rg *Robotgo) Run(ctx context.Context, redis *redis.Client, max_threads uin
 	appqueue.ContinueWorkers()
 	appqueue.RunQueue()
 	go appqueue.SitesQueue()
+	go appqueue.ClearQueue()
 }

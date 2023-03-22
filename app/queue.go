@@ -25,23 +25,28 @@ func (q *Queue) RunQueue() {
 
 	// Если очередь не пуста
 	if count > 0 {
-		// Забираем url из конца списка/очереди
-		_url, err := q.Redis.RPop(q.Ctx, "queue").Result()
+		// Проверяем доступность места на обработку
+		wcount, _ := q.Redis.LLen(q.Ctx, "worker").Result()
 
-		if err != nil {
-			log := &Logs{}
-			log.LogWrite(err)
-		} else {
-			is_add := q.AddWorker(_url)
+		if uint64(wcount) < q.MaxThreads {
+			// Забираем url из конца списка/очереди
+			_url, err := q.Redis.RPop(q.Ctx, "queue").Result()
 
-			// Если url добавлена в обработку
-			if is_add {
-				domain_id, _ := q.Redis.HGet(q.Ctx, _url, "domain_id").Result()
-				domain_full, _ := q.Redis.HGet(q.Ctx, _url, "domain_full").Result()
+			if err != nil {
+				log := &Logs{}
+				log.LogWrite(err)
+			} else {
+				is_add := q.AddWorker(_url)
 
-				d_id, _ := strconv.ParseUint(domain_id, 10, 64)
+				// Если url добавлена в обработку
+				if is_add {
+					domain_id, _ := q.Redis.HGet(q.Ctx, _url, "domain_id").Result()
+					domain_full, _ := q.Redis.HGet(q.Ctx, _url, "domain_full").Result()
 
-				defer q.HandleQueue(_url, d_id, domain_full)
+					d_id, _ := strconv.ParseUint(domain_id, 10, 64)
+
+					defer q.HandleQueue(_url, d_id, domain_full)
+				}
 			}
 		}
 	}
@@ -141,28 +146,23 @@ func (q *Queue) SetHash(url string, _status int, _handler int, isRun bool) {
 
 // Метод добавляет страницу в обработку
 func (q *Queue) AddWorker(_url string) bool {
-	// Проверяем доступность места на обработку
-	wcount, _ := q.Redis.LLen(q.Ctx, "worker").Result()
+	// Проверяем есть ли урл в обработке
+	indxPos, _ := q.Redis.LPos(q.Ctx, "worker", _url, redis.LPosArgs{Rank: 1}).Result()
 
-	if uint64(wcount) < q.MaxThreads {
-		// Проверяем есть ли урл в обработке
-		indxPos, _ := q.Redis.LPos(q.Ctx, "worker", _url, redis.LPosArgs{Rank: 1}).Result()
+	// Если нет, то добавляем
+	if indxPos <= 0 {
+		status, _ := q.Redis.HGet(q.Ctx, _url, "status").Result()
+		handler, _ := q.Redis.HGet(q.Ctx, _url, "handler").Result()
 
-		// Если нет, то добавляем
-		if indxPos <= 0 {
-			status, _ := q.Redis.HGet(q.Ctx, _url, "status").Result()
-			handler, _ := q.Redis.HGet(q.Ctx, _url, "handler").Result()
+		d_status, _ := strconv.ParseUint(status, 10, 8)
+		d_handler, _ := strconv.ParseUint(handler, 10, 8)
 
-			d_status, _ := strconv.ParseUint(status, 10, 8)
-			d_handler, _ := strconv.ParseUint(handler, 10, 8)
+		// Если url доступен для обработки
+		if d_status == 0 && d_handler == 0 {
+			_int, _ := q.Redis.LPush(q.Ctx, "worker", _url).Result()
 
-			// Если url доступен для обработки
-			if d_status == 0 && d_handler == 0 {
-				_int, _ := q.Redis.LPush(q.Ctx, "worker", _url).Result()
-
-				if _int > 0 {
-					return true
-				}
+			if _int > 0 {
+				return true
 			}
 		}
 	}
