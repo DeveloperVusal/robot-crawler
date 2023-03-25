@@ -23,7 +23,15 @@ func (h *Env) LoadEnv() {
 	var err2 = godotenv.Load(filename)
 
 	if err2 != nil {
-		log.Fatal("Error loading .env file")
+		dir, _ := os.Getwd()
+		projectPath := filepath.Join(filepath.Dir(dir), filepath.Base(dir))
+		filename := filepath.Join(projectPath, "/.env")
+
+		var err = godotenv.Load(filename)
+
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
 	}
 }
 

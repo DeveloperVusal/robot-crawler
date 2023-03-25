@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/tidwall/evio"
 )
 
+var eventloop uint64 = 1
 var rdb *redis.Client
 var max_threads uint64
 
@@ -44,9 +46,13 @@ func main() {
 	var events evio.Events
 
 	events.Tick = func() (delay time.Duration, action evio.Action) {
+		fmt.Println("EventLoop", eventloop)
 		rb.Run(context.Background(), rdb, max_threads)
+		fmt.Println("")
 
 		delay = time.Second * 1
+
+		eventloop++
 
 		return
 	}

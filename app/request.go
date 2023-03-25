@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,7 +31,8 @@ type PageReqData struct {
 }
 
 // Метод получает данные запрашиваемого url адреса
-func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
+func (rq *Request) GetPageData(url *string, domain *string) (PageReqData, bool) {
+	log := &Logs{}
 	env := helpers.Env{}
 	env.LoadEnv()
 
@@ -45,7 +47,6 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 		// req.Header.Set("Accept-Encoding", "deflate, gzip;q=1.0, *;q=0.5")
 
 		if err != nil {
-			log := &Logs{}
 			log.LogWrite(err)
 		}
 
@@ -63,7 +64,6 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 		resp, err = client.Do(req)
 
 		if err != nil {
-			log := &Logs{}
 			log.LogWrite(err)
 
 			return PageReqData{}, false
@@ -71,6 +71,18 @@ func (rq *Request) GetPageData(url *string) (PageReqData, bool) {
 
 		if resp.StatusCode == 200 {
 			// fmt.Println("Done!")
+			break
+		} else if resp.StatusCode == 429 || resp.StatusCode == 406 {
+			rq.Redis.Set(rq.Ctx, "lot_req_"+*domain, 900, time.Second*900)
+			appqueue := &Queue{
+				Redis: rq.Redis,
+				Ctx:   rq.Ctx,
+			}
+
+			appqueue.RemoveWorker(*url)
+
+			log.LogWrite(errors.New(*domain + " => " + "A lot of requests! Retry-After: " + resp.Header.Get("Retry-After")))
+
 			break
 		} else {
 			location := resp.Header.Get("Location")

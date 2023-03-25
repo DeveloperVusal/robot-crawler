@@ -21,7 +21,15 @@ func (l *Logs) LogWrite(_err error) {
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		dir, _ := os.Getwd()
+		projectPath := filepath.Join(filepath.Dir(dir), filepath.Base(dir))
+		filename := filepath.Join(projectPath, "/logs/app.log")
+
+		f, err = os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+
+		if err != nil {
+			log.Fatalf("error opening file: %v", err)
+		}
 	}
 
 	defer f.Close()

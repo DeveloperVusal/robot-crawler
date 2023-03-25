@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	neturl "net/url"
 	"strconv"
 	"time"
@@ -20,6 +21,8 @@ type Queue struct {
 
 // Метод проверяет и запускает индексацию страниц в очереди
 func (q *Queue) RunQueue() {
+	fmt.Println("RunQueue")
+
 	// Получаем наличие очереди
 	count, _ := q.Redis.LLen(q.Ctx, "queue").Result()
 
@@ -36,16 +39,24 @@ func (q *Queue) RunQueue() {
 				log := &Logs{}
 				log.LogWrite(err)
 			} else {
-				is_add := q.AddWorker(_url)
+				domain_full, _ := q.Redis.HGet(q.Ctx, _url, "domain_full").Result()
 
-				// Если url добавлена в обработку
-				if is_add {
-					domain_id, _ := q.Redis.HGet(q.Ctx, _url, "domain_id").Result()
-					domain_full, _ := q.Redis.HGet(q.Ctx, _url, "domain_full").Result()
+				// Проверяем не ограничил ли на запросы ресурс
+				isLotReq, _ := q.Redis.Exists(q.Ctx, "lot_req_"+domain_full).Result()
 
-					d_id, _ := strconv.ParseUint(domain_id, 10, 64)
+				if isLotReq <= 0 {
+					is_add := q.AddWorker(_url) // добавляем в обработку
 
-					defer q.HandleQueue(_url, d_id, domain_full)
+					// Если url добавлена в обработку
+					if is_add {
+						domain_id, _ := q.Redis.HGet(q.Ctx, _url, "domain_id").Result()
+
+						d_id, _ := strconv.ParseUint(domain_id, 10, 64)
+
+						defer q.HandleQueue(_url, d_id, domain_full)
+					}
+				} else {
+					fmt.Println("Skip:", _url)
 				}
 			}
 		}
@@ -58,6 +69,8 @@ func (q *Queue) HandleQueue(url string, domain_id uint64, domain_full string) {
 
 	isContinue := true
 	_, errp := neturl.Parse(url)
+
+	fmt.Println("HandleQueue", url)
 
 	// Если в очередь попал не корректный url
 	if errp != nil {
@@ -76,11 +89,11 @@ func (q *Queue) HandleQueue(url string, domain_id uint64, domain_full string) {
 			Ctx:   q.Ctx,
 		}
 
-		// Если есть доступный лимит для обработки
+		// // Если есть доступный лимит для обработки
 		if req.IsRequestLimit(&domain_full) {
 			q.SetHash(url, 0, 1, true)
 
-			resp, isDisable := req.GetPageData(&url) // Делаем запрос и получаем данные url
+			resp, isDisable := req.GetPageData(&url, &domain_full) // Делаем запрос и получаем данные url
 
 			if isDisable {
 				indx := &Indexing{
@@ -208,18 +221,24 @@ func (q *Queue) ClearQueue() {
 		keys, _cursor, _ := q.Redis.Scan(q.Ctx, cursor, "", 20).Result()
 
 		for _, _url := range keys {
-			_urlParse, _ := neturl.Parse(_url)
+			if len(_url) > 0 {
+				_urlParse, _ := neturl.Parse(_url)
 
-			if len(_urlParse.Host) > 0 {
-				_launched_at, _ := q.Redis.HGet(q.Ctx, _url, "launched_at").Result()
+				if _urlParse != nil {
+					if len(_urlParse.Host) > 0 {
+						_launched_at, _ := q.Redis.HGet(q.Ctx, _url, "launched_at").Result()
 
-				if len(_launched_at) > 0 {
-					launched_at, _ := strconv.ParseInt(_launched_at, 10, 64)
+						if len(_launched_at) > 0 {
+							launched_at, _ := strconv.ParseInt(_launched_at, 10, 64)
 
-					if (time.Now().Unix() - launched_at) > 86400 {
-						q.Redis.Del(q.Ctx, _url)
+							if (time.Now().Unix() - launched_at) > 86400 {
+								q.Redis.Del(q.Ctx, _url)
+							}
+						}
 					}
 				}
+			} else {
+				q.Redis.Del(q.Ctx, _url)
 			}
 		}
 
@@ -285,7 +304,12 @@ func (q *Queue) SitesQueue() {
 
 		rows.Scan(&id, &domain_full)
 
+		// Проверяем не ограничил ли на запросы ресурс
+		isLotReq, _ := q.Redis.Exists(q.Ctx, "lot_req_"+domain_full).Result()
+
 		// Пробуем добавить сайт в очередь
-		q.AddUrlQueue(domain_full, id, domain_full)
+		if isLotReq <= 0 {
+			q.AddUrlQueue(domain_full, id, domain_full)
+		}
 	}
 }
