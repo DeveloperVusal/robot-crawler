@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	neturl "net/url"
 	"regexp"
 	"strconv"
@@ -60,9 +59,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 			}
 
 			if isValid {
-				fmt.Println("indexing url", indx.Resp.Url)
-				fmt.Println("")
-
 				// Получаем Dom документ страницы
 				doc, err := goquery.NewDocumentFromReader(indx.Resp.Body)
 
@@ -215,8 +211,6 @@ func (indx *Indexing) Run(id uint64, url string) {
 
 		log.LogWrite(errors.New(`err step: ` + strconv.Itoa(indx.Resp.StatusCode) + `, 1 -- ` + indx.QueueKey))
 	}
-
-	// fmt.Println("")
 }
 
 // Метод получает содержимое/контент на странице

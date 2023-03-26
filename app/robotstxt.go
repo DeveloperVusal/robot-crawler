@@ -32,6 +32,7 @@ func (r *Robotstxt) UrlHandle(link *string) (bool, string) {
 
 	robotsData := r.get(&filename)
 	userAgent := env.Env("BOT_USERAGENT")
+
 	var isValid bool
 	var handleUrl string
 

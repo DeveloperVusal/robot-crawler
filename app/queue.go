@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	neturl "net/url"
 	"strconv"
 	"time"
@@ -21,7 +20,6 @@ type Queue struct {
 
 // Метод проверяет и запускает индексацию страниц в очереди
 func (q *Queue) RunQueue() {
-	fmt.Println("RunQueue")
 
 	// Получаем наличие очереди
 	count, _ := q.Redis.LLen(q.Ctx, "queue").Result()
@@ -55,8 +53,6 @@ func (q *Queue) RunQueue() {
 
 						defer q.HandleQueue(_url, d_id, domain_full)
 					}
-				} else {
-					fmt.Println("Skip:", _url)
 				}
 			}
 		}
@@ -69,8 +65,6 @@ func (q *Queue) HandleQueue(url string, domain_id uint64, domain_full string) {
 
 	isContinue := true
 	_, errp := neturl.Parse(url)
-
-	fmt.Println("HandleQueue", url)
 
 	// Если в очередь попал не корректный url
 	if errp != nil {
@@ -272,9 +266,6 @@ func (q *Queue) AddUrlQueue(url string, domain_id uint64, domain_full string) {
 	if indxPos <= 0 {
 		q.Redis.LPush(q.Ctx, "queue", url).Result()
 
-		// if st > 0 {
-		// 	// fmt.Println("add queue =>", url)
-		// }
 	}
 }
 
